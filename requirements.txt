@@ -3,6 +3,7 @@ supabase
 streamlit-js-eval
 extra-streamlit-components
 geopy
+pytz
 python-dotenv
 pandas
 numpy
