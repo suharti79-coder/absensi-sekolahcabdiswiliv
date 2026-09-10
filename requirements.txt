@@ -1,10 +1,9 @@
 streamlit
+supabase
+streamlit-js-eval
+extra-streamlit-components
+geopy
+python-dotenv
 pandas
 numpy
-pytz
-geopy
-streamlit-geolocation
-openpyxl
-extra-streamlit-components
-supabase
-python-dotenv
+opencv-python-headless
