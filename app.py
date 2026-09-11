@@ -49,6 +49,11 @@ st.markdown("""
     [data-testid="stDecoration"] {visibility: hidden !important;} 
     footer {visibility: hidden !important;} 
     #MainMenu {visibility: hidden !important;}
+    
+    /* Menyembunyikan ikon rantai / anchor link pada judul */
+    [data-testid="stHeaderActionElements"], .header-anchor {
+        display: none !important;
+    }
 
     .block-container { padding-top: 2rem !important; }
 
