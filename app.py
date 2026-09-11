@@ -755,22 +755,39 @@ elif st.session_state.role == "Superadmin":
         st.write("---")
         st.markdown("### 📋 Edit & Kelola Daftar Pegawai Aktif")
         
-        opsi_sekolah_filter = ["Semua Sekolah"]
-        if not st.session_state.schools.empty:
-            opsi_sekolah_filter += st.session_state.schools['school_name'].tolist()
+        # --- PERUBAHAN: MENAMBAHKAN KOLOM PENCARIAN ---
+        col_f1, col_f2 = st.columns(2)
+        
+        with col_f1:
+            opsi_sekolah_filter = ["Semua Sekolah"]
+            if not st.session_state.schools.empty:
+                opsi_sekolah_filter += st.session_state.schools['school_name'].tolist()
+            sekolah_pilihan_peg = st.selectbox("🏢 Filter Sekolah:", opsi_sekolah_filter, key="filter_sekolah_pegawai")
             
-        sekolah_pilihan_peg = st.selectbox("🏢 Filter Berdasarkan Sekolah:", opsi_sekolah_filter, key="filter_sekolah_pegawai")
+        with col_f2:
+            search_query = st.text_input("🔍 Cari NIP atau Nama:", placeholder="Ketik NIP atau Nama...", key="search_pegawai")
         
         df_peg_filtered = st.session_state.employees.copy()
+        
+        # 1. Terapkan filter sekolah
         if sekolah_pilihan_peg != "Semua Sekolah":
             df_peg_filtered = df_peg_filtered[df_peg_filtered['school_name'] == sekolah_pilihan_peg]
+            
+        # 2. Terapkan filter pencarian teks (NIP atau Nama)
+        if search_query:
+            mask_search = (
+                df_peg_filtered['nip'].astype(str).str.contains(search_query, case=False, na=False) | 
+                df_peg_filtered['name'].astype(str).str.contains(search_query, case=False, na=False)
+            )
+            df_peg_filtered = df_peg_filtered[mask_search]
             
         total_peg = len(df_peg_filtered)
         
         if total_peg == 0:
-            st.info("Tidak ada data pegawai yang ditemukan.")
+            st.info("Tidak ada data pegawai yang ditemukan sesuai filter/pencarian Anda.")
         else:
             items_per_page = 10
+            # ... (Lanjutkan dengan sisa kode pagination dan expander seperti sebelumnya)
             total_pages = (total_peg // items_per_page) + (1 if total_peg % items_per_page > 0 else 0)
             
             col_info, col_page = st.columns([1, 1])
