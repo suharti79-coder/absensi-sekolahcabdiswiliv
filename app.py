@@ -432,14 +432,17 @@ if st.session_state.role == "Pegawai":
                             tgl_sekarang = now.strftime('%Y-%m-%d')
                             jenis_aksi = "Masuk" if btn_masuk else "Pulang"
                             
-                            df_absen = get_data_absensi()
+                            # 🚀 OPTIMASI: Hanya tarik data pegawai ini di tanggal ini langsung dari Supabase
+                            try:
+                                res_absen = supabase.table('absensi').select('status').eq('nip', str(emp_data['nip'])).eq('tanggal', tgl_sekarang).execute()
+                                df_absen_hari_ini = pd.DataFrame(res_absen.data) if res_absen.data else pd.DataFrame()
+                            except Exception:
+                                df_absen_hari_ini = pd.DataFrame()
                             
                             sudah_absen = False
-                            if not df_absen.empty and 'nip' in df_absen.columns and 'tanggal' in df_absen.columns:
-                                data_terceklis = df_absen[
-                                    (df_absen['nip'].astype(str) == str(emp_data['nip'])) & 
-                                    (df_absen['tanggal'] == tgl_sekarang) & 
-                                    (df_absen['status'].str.contains(jenis_aksi, na=False, case=False))
+                            if not df_absen_hari_ini.empty and 'status' in df_absen_hari_ini.columns:
+                                data_terceklis = df_absen_hari_ini[
+                                    df_absen_hari_ini['status'].str.contains(jenis_aksi, na=False, case=False)
                                 ]
                                 if not data_terceklis.empty:
                                     sudah_absen = True
@@ -588,12 +591,18 @@ elif st.session_state.role == "Admin":
     if df_emp.empty:
         st.warning(f"Tidak ada pegawai terdaftar pada unit {sekolah_pilihan}.")
     else:
-        df_absen_raw = get_data_absensi()
         tgl_str = tgl_pilihan.strftime('%Y-%m-%d')
         
-        if not df_absen_raw.empty and 'tanggal' in df_absen_raw.columns:
-            df_absen_tgl = df_absen_raw[df_absen_raw['tanggal'] == tgl_str]
-        else:
+        # 🚀 OPTIMASI: Hanya tarik data dari Supabase yang tanggalnya cocok dengan pilihan Admin
+        try:
+            res_absen_admin = supabase.table('absensi').select('*').eq('tanggal', tgl_str).execute()
+            if res_absen_admin.data:
+                df_absen_tgl = pd.DataFrame(res_absen_admin.data)
+                if 'nip' in df_absen_tgl.columns:
+                    df_absen_tgl['nip'] = df_absen_tgl['nip'].astype(str)
+            else:
+                df_absen_tgl = pd.DataFrame(columns=['nip', 'nama', 'sekolah', 'tanggal', 'jam', 'jarak_m', 'status'])
+        except Exception:
             df_absen_tgl = pd.DataFrame(columns=['nip', 'nama', 'sekolah', 'tanggal', 'jam', 'jarak_m', 'status'])
         
         rekap_list = []
