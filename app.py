@@ -201,7 +201,7 @@ if st.session_state.role is None:
                     if not match.empty:
                         is_valid = True
 
-                if is_valid or (input_user_admin == "admin" and pwd == "admin123") or (pwd == "admin123" and not input_user_admin):
+                if is_valid: 
                     st.session_state.role = "Admin"
                     cookie_manager.set("role", "Admin")
                     time.sleep(0.5)
