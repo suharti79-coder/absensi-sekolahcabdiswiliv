@@ -11,6 +11,8 @@ import streamlit.components.v1 as components
 import extra_streamlit_components as stx
 from dotenv import load_dotenv
 from supabase import create_client, Client
+import cv2
+import numpy as np
 
 # --- 1. MEMUAT ENVIRONMENT VARIABLES & SUPABASE ---
 load_dotenv()
@@ -156,7 +158,7 @@ def logout():
 # HALAMAN LOGIN UTAMA
 # ==========================================
 if st.session_state.role is None:
-    st.title("📍 Portal Presensi Cabdis Wil IV")
+    st.title("📍 Portal Absensi Cabdis Wil IV")
     st.info("Selamat datang! Untuk merekam kehadiran Anda, silakan klik tombol di bawah ini.")
     
     if st.button("📸 Mulai Presensi Wajah & GPS", type="primary", width="stretch"):
@@ -406,8 +408,24 @@ elif st.session_state.role == "Admin":
         
         foto = st.file_uploader("Upload Pas Foto", type=['jpg', 'jpeg', 'png'])
         if foto and st.button("Simpan Foto"):
-            base64_str = base64.b64encode(foto.getvalue()).decode('utf-8')
+            
+            # --- PROSES KOMPRESI GAMBAR ---
+            # Mengubah input stream file ke bentuk numpy array
+            file_bytes = np.asarray(bytearray(foto.getvalue()), dtype=np.uint8)
+            img = cv2.imdecode(file_bytes, 1)
+            
+            # Mengatur ukuran gambar maksimal ke 400 pixel (mempertahankan rasio/proporsi)
+            h, w = img.shape[:2]
+            max_dim = 400
+            if max(h, w) > max_dim:
+                scale = max_dim / max(h, w)
+                img = cv2.resize(img, (int(w * scale), int(h * scale)))
+                
+            # Mengkompresi ke dalam bentuk .jpg dengan kualitas 60%
+            _, buffer = cv2.imencode('.jpg', img, [int(cv2.IMWRITE_JPEG_QUALITY), 60])
+            base64_str = base64.b64encode(buffer).decode('utf-8')
             full_base64 = f"data:image/jpeg;base64,{base64_str}"
+            # --- AKHIR PROSES KOMPRESI ---
             
             supabase.table('pegawai').update({
                 'photo_uploaded': True,
