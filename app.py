@@ -11,8 +11,6 @@ import streamlit.components.v1 as components
 import extra_streamlit_components as stx
 from dotenv import load_dotenv
 from supabase import create_client, Client
-import cv2
-import numpy as np
 
 # --- 1. MEMUAT ENVIRONMENT VARIABLES & SUPABASE ---
 load_dotenv()
@@ -82,8 +80,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- 4. FUNGSI INTERAKSI DATABASE SUPABASE (SUDAH DI-OPTIMASI DENGAN CACHE) ---
-@st.cache_data(ttl=60)
+# --- 4. FUNGSI INTERAKSI DATABASE SUPABASE ---
 def get_data_sekolah():
     try:
         res = supabase.table('sekolah').select('*').execute()
@@ -93,7 +90,6 @@ def get_data_sekolah():
         pass
     return pd.DataFrame(columns=['school_name', 'lat', 'lng', 'radius_m'])
 
-@st.cache_data(ttl=60)
 def get_data_pegawai():
     try:
         res = supabase.table('pegawai').select('*').execute()
@@ -105,7 +101,6 @@ def get_data_pegawai():
         pass
     return pd.DataFrame(columns=['nip', 'name', 'school_name', 'photo_uploaded', 'photo_base64'])
 
-@st.cache_data(ttl=300)
 def get_data_pengaturan():
     try:
         res = supabase.table('pengaturan').select('*').execute()
@@ -119,7 +114,6 @@ def get_data_pengaturan():
         return pd.DataFrame([{'batas_masuk': '07:30', 'batas_pulang': '16:00'}])
 
 def get_data_absensi():
-    # Tidak di-cache agar rekap absensi selalu real-time
     try:
         res = supabase.table('absensi').select('*').execute()
         if res.data:
@@ -406,7 +400,6 @@ elif st.session_state.role == "Admin":
     if st.session_state.employees.empty:
          st.warning("Belum ada data pegawai. Minta Superadmin menambah pegawai terlebih dahulu.")
     else:
-        else:
         st.markdown("### 📸 1. Kelola Foto Acuan Pegawai")
         
         # 1. Filter Berdasarkan Sekolah
@@ -630,7 +623,6 @@ elif st.session_state.role == "Superadmin":
                         'radius_m': new_rad
                     }
                     supabase.table('sekolah').insert(data_sekolah_baru).execute()
-                    st.cache_data.clear() # Bersihkan memori
                     st.session_state.schools = get_data_sekolah()
                     st.success(f"Sekolah {new_sch_name} berhasil ditambahkan!")
                     st.rerun()
@@ -653,7 +645,6 @@ elif st.session_state.role == "Superadmin":
             records = edited_schools.to_dict(orient='records')
             if records:
                 supabase.table('sekolah').insert(records).execute()
-            st.cache_data.clear() # Bersihkan memori
             st.session_state.schools = get_data_sekolah()
             st.success("Perubahan data sekolah berhasil disimpan secara permanen!")
             st.rerun()
@@ -675,7 +666,6 @@ elif st.session_state.role == "Superadmin":
                         'photo_base64': ''
                     }
                     supabase.table('pegawai').insert(data_pegawai_baru).execute()
-                    st.cache_data.clear() # Bersihkan memori
                     st.session_state.employees = get_data_pegawai()
                     st.success(f"Pegawai ditambahkan ke {new_school}!")
                     st.rerun()
@@ -703,7 +693,6 @@ elif st.session_state.role == "Superadmin":
                         
                         records = df_upload.to_dict(orient='records')
                         supabase.table('pegawai').upsert(records, on_conflict='nip').execute()
-                        st.cache_data.clear() # Bersihkan memori
                         st.session_state.employees = get_data_pegawai()
                         
                         st.success(f"Berhasil mengunggah {len(df_upload)} data pegawai!")
@@ -780,7 +769,6 @@ elif st.session_state.role == "Superadmin":
         with col2:
             if st.button("🚨 Reset Semua Pegawai"):
                 supabase.table('pegawai').delete().neq('nip', '').execute()
-                st.cache_data.clear() # Bersihkan memori
                 st.session_state.employees = pd.DataFrame()
                 st.success("Data pegawai telah di-reset!")
 
@@ -804,7 +792,6 @@ elif st.session_state.role == "Superadmin":
                 }
                 supabase.table('pengaturan').delete().neq('batas_masuk', '').execute()
                 supabase.table('pengaturan').insert(updated_settings).execute()
-                st.cache_data.clear() # Bersihkan memori
                 st.session_state.settings = get_data_pengaturan()
                 st.success("✅ Pengaturan jam kerja berhasil diperbarui di database!")
                 st.rerun()
