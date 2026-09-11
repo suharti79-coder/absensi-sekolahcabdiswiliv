@@ -1,4 +1,6 @@
 import io
+import hmac
+import hashlib
 import streamlit as st
 import pandas as pd
 import datetime
@@ -25,6 +27,32 @@ except Exception as e:
     st.error(f"Gagal terhubung ke Supabase: {e}")
     st.stop()
 
+# --- 1.5. FUNGSI KRIPTOGRAFI KEAMANAN COOKIE (HMAC) ---
+# Secret Key diambil dari .env / st.secrets, pastikan ganti dengan string acak yang panjang
+SECRET_KEY = os.environ.get("COOKIE_SECRET") or st.secrets.get("COOKIE_SECRET", "kunci_rahasia_absensi_sekolah_cabdis_wil_iv_987654321")
+
+def generate_signed_token(role_name: str) -> str:
+    """Membuat token dalam format 'ROLE|SIGNATURE'"""
+    signature = hmac.new(SECRET_KEY.encode(), role_name.encode(), hashlib.sha256).hexdigest()
+    return f"{role_name}|{signature}"
+
+def verify_and_get_role(token: str):
+    """Memvalidasi apakah token cookie asli dan belum diubah di F12 (Developer Tools)"""
+    if not token or "|" not in token:
+        return None
+    
+    parts = token.split("|", 1)
+    role_name, client_signature = parts[0], parts[1]
+    
+    # Hitung signature resmi di server
+    expected_signature = hmac.new(SECRET_KEY.encode(), role_name.encode(), hashlib.sha256).hexdigest()
+    
+    # Bandingkan signature dari client dengan signature asli server
+    if hmac.compare_digest(client_signature, expected_signature):
+        return role_name
+    
+    return None  # Jika signature tidak cocok (diubah di F12), kembalikan None!
+    
 # --- 2. KONFIGURASI HALAMAN & COOKIE ---
 st.set_page_config(page_title="Sistem Absensi Sekolah Cabdis Wil IV", page_icon="🏫", layout="centered")
 
@@ -153,20 +181,22 @@ if 'employees' not in st.session_state:
 if 'settings' not in st.session_state:
     st.session_state.settings = get_data_pengaturan()
 
-# --- BACA STATUS COOKIE ---
-cookie_role = cookie_manager.get(cookie="role")
+# --- BACA STATUS COOKIE TERPROTEKSI HMAC ---
+raw_token = cookie_manager.get(cookie="auth_token")
+valid_role = verify_and_get_role(raw_token)
 
-if 'role' not in st.session_state:
-    st.session_state.role = cookie_role
-
-if cookie_role and st.session_state.role != cookie_role:
-    st.session_state.role = cookie_role
+# Hanya set session jika signature cookie TERBUKTI VALID
+if valid_role:
+    st.session_state.role = valid_role
+else:
+    st.session_state.role = None
 
 # --- FUNGSI LOGOUT ---
 def logout():
     st.session_state.role = None
     try:
-        cookie_manager.delete("role")
+        cookie_manager.delete("auth_token")
+        cookie_manager.delete("role") # Menghapus cookie lama jika ada
     except KeyError:
         pass
 
@@ -179,7 +209,7 @@ if st.session_state.role is None:
 
     if st.button("📸 Mulai Presensi Wajah & GPS", type="primary", width="stretch"):
         st.session_state.role = "Pegawai"
-        cookie_manager.set("role", "Pegawai")
+        cookie_manager.set("auth_token", generate_signed_token("Pegawai"))
         time.sleep(0.5)
         st.rerun()
 
@@ -203,7 +233,7 @@ if st.session_state.role is None:
 
                 if is_valid: 
                     st.session_state.role = "Admin"
-                    cookie_manager.set("role", "Admin")
+                    cookie_manager.set("auth_token", generate_signed_token("Admin"))
                     time.sleep(0.5)
                     st.rerun()
                 else: 
@@ -218,7 +248,7 @@ if st.session_state.role is None:
                 
                 if pwd_super == superadmin_password:
                     st.session_state.role = "Superadmin"
-                    cookie_manager.set("role", "Superadmin")
+                    cookie_manager.set("auth_token", generate_signed_token("Superadmin"))
                     time.sleep(0.5)
                     st.rerun()
                 else: 
