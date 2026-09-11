@@ -213,14 +213,16 @@ if st.session_state.role is None:
         with st.expander("🛠️ Login Superadmin"):
             pwd_super = st.text_input("Password Superadmin:", type="password", key="pwd_super_main")
             if st.button("Masuk Superadmin", width="stretch", key="btn_super_main"):
-                if pwd_super == "superadmin123":
+                # Mengambil password dari secrets atau .env, jika tidak ada fallback ke default
+                superadmin_password = os.environ.get("SUPERADMIN_PASSWORD") or st.secrets.get("SUPERADMIN_PASSWORD", "superadmin123")
+                
+                if pwd_super == superadmin_password:
                     st.session_state.role = "Superadmin"
                     cookie_manager.set("role", "Superadmin")
                     time.sleep(0.5)
                     st.rerun()
                 else: 
                     st.error("Password Salah!")
-
     st.stop()
 
 # ==========================================
