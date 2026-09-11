@@ -169,7 +169,16 @@ def logout():
 # HALAMAN LOGIN UTAMA
 # ==========================================
 if st.session_state.role is None:
-    st.title("📍 Portal Presensi Sekolah CABDIS WIL IV")
+    # Membuat 3 kolom untuk memposisikan logo di tengah
+col_kiri, col_tengah, col_kanan = st.columns([1, 1.5, 1])
+
+# Menampilkan gambar di kolom tengah
+with col_tengah:
+    # Pastikan nama file sesuai persis dengan yang ada di GitHub
+    st.image("LOGO APK ABSENSI SEKOLAH_2.jpg", use_container_width=True)
+
+# Membuat judul baru tanpa ikon emoji, dengan posisi rata tengah
+st.markdown("<h2 style='text-align: center; color: #0F2C59; margin-top: -15px;'>Portal Presensi Sekolah CABDIS WIL IV</h2>", unsafe_allow_html=True)
     st.info("Selamat datang! Untuk merekam kehadiran Anda, silakan klik tombol di bawah ini.")
     
     if st.button("📸 Mulai Presensi Wajah & GPS", type="primary", width="stretch"):
