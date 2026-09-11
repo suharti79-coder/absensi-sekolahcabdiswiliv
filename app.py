@@ -168,7 +168,7 @@ def logout():
 # ==========================================
 # HALAMAN LOGIN UTAMA
 # ==========================================
-   if st.session_state.role is None:
+if st.session_state.role is None:
     st.title("📍 Portal Presensi Sekolah CABDIS WIL IV")
     st.info("Selamat datang! Untuk merekam kehadiran Anda, silakan klik tombol di bawah ini.")
 
