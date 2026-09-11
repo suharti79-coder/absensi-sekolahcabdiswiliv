@@ -181,22 +181,43 @@ if 'employees' not in st.session_state:
 if 'settings' not in st.session_state:
     st.session_state.settings = get_data_pengaturan()
 
+# --- INISIALISASI SESSION STATE DASAR ---
+if 'role' not in st.session_state:
+    st.session_state.role = None
+if 'logout_triggered' not in st.session_state:
+    st.session_state.logout_triggered = False
+
 # --- BACA STATUS COOKIE TERPROTEKSI HMAC ---
 raw_token = cookie_manager.get(cookie="auth_token")
 valid_role = verify_and_get_role(raw_token)
 
-# Hanya set session jika signature cookie TERBUKTI VALID
-if valid_role:
-    st.session_state.role = valid_role
+# --- LOGIKA SINKRONISASI ANTI-LAG ---
+if st.session_state.role is not None:
+    # 1. Jika user SUDAH login lewat tombol, pastikan flag logout mati
+    st.session_state.logout_triggered = False
+elif st.session_state.logout_triggered:
+    # 2. Jika sedang proses logout, abaikan sisa cookie lama di browser sementara waktu
+    if raw_token is None:
+        st.session_state.logout_triggered = False # Reset flag jika cookie sudah benar-benar hilang
 else:
-    st.session_state.role = None
+    # 3. Mode Auto-Login (Kasus buka tab baru atau F5)
+    if valid_role:
+        st.session_state.role = valid_role
+    elif raw_token and not valid_role:
+        # Keamanan F12: Jika cookie ada tapi dimanipulasi, paksa logout
+        st.session_state.role = None
+        try:
+            cookie_manager.delete("auth_token", key="force_del_auth")
+        except KeyError:
+            pass
 
 # --- FUNGSI LOGOUT ---
 def logout():
     st.session_state.role = None
+    st.session_state.logout_triggered = True  # Mengaktifkan flag anti-bounce
     try:
         cookie_manager.delete("auth_token", key="delete_auth_token")
-        cookie_manager.delete("role", key="delete_role") # Menghapus cookie lama jika ada
+        cookie_manager.delete("role", key="delete_role") 
     except KeyError:
         pass
 
