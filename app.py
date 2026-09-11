@@ -1,3 +1,4 @@
+import io
 import streamlit as st
 import pandas as pd
 import datetime
@@ -586,11 +587,17 @@ elif st.session_state.role == "Admin":
         df_berwarna = df_rekap.style.map(warnai_status, subset=['STATUS'])
         
         st.dataframe(df_berwarna, width="stretch")
+        # Buat buffer untuk file Excel di dalam memori
+        buffer = io.BytesIO()
+        with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+            df_rekap.to_excel(writer, index=False, sheet_name='Rekap Absensi')
+            
+        # Tombol download baru dengan format .xlsx
         st.download_button(
-            "📥 Download Rekap Absensi (CSV)",
-            data=df_rekap.to_csv(index=False).encode('utf-8'),
-            file_name=f"Rekap_Absensi_{sekolah_pilihan.replace(' ', '_')}_{tgl_str}.csv",
-            mime="text/csv"
+            label="📥 Download Rekap Absensi (Excel)",
+            data=buffer.getvalue(),
+            file_name=f"Rekap_Absensi_{sekolah_pilihan.replace(' ', '_')}_{tgl_str}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
 
 # ==========================================
