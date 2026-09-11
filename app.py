@@ -169,7 +169,7 @@ def logout():
 # HALAMAN LOGIN UTAMA
 # ==========================================
 if st.session_state.role is None:
-    st.title("📍 Portal Presensi Terpadu")
+    st.title("📍 Portal Presensi Sekolah CABDIS WIL IV")
     st.info("Selamat datang! Untuk merekam kehadiran Anda, silakan klik tombol di bawah ini.")
     
     if st.button("📸 Mulai Presensi Wajah & GPS", type="primary", width="stretch"):
