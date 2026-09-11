@@ -195,8 +195,8 @@ else:
 def logout():
     st.session_state.role = None
     try:
-        cookie_manager.delete("auth_token")
-        cookie_manager.delete("role") # Menghapus cookie lama jika ada
+        cookie_manager.delete("auth_token", key="delete_auth_token")
+        cookie_manager.delete("role", key="delete_role") # Menghapus cookie lama jika ada
     except KeyError:
         pass
 
