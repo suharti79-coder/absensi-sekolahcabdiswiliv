@@ -101,6 +101,15 @@ def get_data_pegawai():
         pass
     return pd.DataFrame(columns=['nip', 'name', 'school_name', 'photo_uploaded', 'photo_base64'])
 
+def get_data_admin():
+    try:
+        res = supabase.table('admins').select('*').execute()
+        if res.data:
+            return pd.DataFrame(res.data)
+    except Exception:
+        pass
+    return pd.DataFrame(columns=['id', 'username', 'password', 'sekolah'])
+
 def get_data_pengaturan():
     try:
         res = supabase.table('pengaturan').select('*').execute()
@@ -172,15 +181,25 @@ if st.session_state.role is None:
     
     with col_admin:
         with st.expander("🔑 Login Admin"):
+            input_user_admin = st.text_input("Username Admin:", key="user_admin_main")
             pwd = st.text_input("Password Admin:", type="password", key="pwd_admin_main")
             if st.button("Masuk Admin", width="stretch", key="btn_admin_main"):
-                if pwd == "admin123":
+                df_adm = get_data_admin()
+                is_valid = False
+                
+                if not df_adm.empty and 'username' in df_adm.columns:
+                    match = df_adm[(df_adm['username'] == input_user_admin) & (df_adm['password'] == pwd)]
+                    if not match.empty:
+                        is_valid = True
+                
+                # Fallback default login jika belum ada data di database
+                if is_valid or (input_user_admin == "admin" and pwd == "admin123") or (pwd == "admin123" and not input_user_admin):
                     st.session_state.role = "Admin"
                     cookie_manager.set("role", "Admin")
                     time.sleep(0.5)
                     st.rerun()
                 else: 
-                    st.error("Password Salah!")
+                    st.error("Username atau Password Salah!")
                     
     with col_super:
         with st.expander("🛠️ Login Superadmin"):
@@ -600,7 +619,14 @@ elif st.session_state.role == "Superadmin":
     st.session_state.employees = get_data_pegawai()
     st.session_state.settings = get_data_pengaturan()
     
-    tab1, tab2, tab3, tab4, tab5 = st.tabs(["🏛️ Kelola Sekolah", "👥 Kelola Pegawai", "📝 Input Izin/Dinas", "🚨 Database", "⚙️ Jam Kerja"])
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+        "🏛️ Kelola Sekolah", 
+        "👥 Kelola Pegawai", 
+        "🔑 Kelola Admin", 
+        "📝 Input Izin/Dinas", 
+        "🚨 Database", 
+        "⚙️ Jam Kerja"
+    ])
     
     with tab1:
         st.markdown("### Tambah Titik Sekolah Baru")
@@ -708,6 +734,86 @@ elif st.session_state.role == "Superadmin":
             st.dataframe(st.session_state.employees[['nip', 'name', 'school_name', 'photo_uploaded']])
 
     with tab3:
+        st.markdown("### 🔑 Kelola Akun Admin")
+        
+        # 1. Form Tambah Akun Admin
+        with st.form("form_tambah_admin"):
+            st.markdown("##### ➕ Tambah Akun Admin Baru")
+            new_admin_user = st.text_input("Username Admin")
+            new_admin_pass = st.text_input("Password Admin", type="password")
+            
+            opsi_sekolah_admin = ["Semua Sekolah"]
+            if not st.session_state.schools.empty:
+                opsi_sekolah_admin += st.session_state.schools['school_name'].tolist()
+                
+            new_admin_school = st.selectbox("Akses Sekolah / Unit Kerja", opsi_sekolah_admin)
+            
+            if st.form_submit_button("➕ Simpan Akun Admin Baru", type="primary"):
+                if new_admin_user and new_admin_pass:
+                    data_admin_baru = {
+                        'username': new_admin_user,
+                        'password': new_admin_pass,
+                        'sekolah': new_admin_school
+                    }
+                    supabase.table('admins').insert(data_admin_baru).execute()
+                    st.success(f"✅ Akun Admin '{new_admin_user}' berhasil ditambahkan!")
+                    time.sleep(1)
+                    st.rerun()
+                else:
+                    st.error("⚠️ Username dan Password wajib diisi.")
+                    
+        st.write("---")
+        st.markdown("### 📋 Daftar Akun Admin Aktif")
+        
+        df_admins = get_data_admin()
+        
+        if df_admins.empty:
+            st.info("Belum ada akun admin tersimpan di database.")
+        else:
+            for idx, row in df_admins.iterrows():
+                admin_id = row.get('id')
+                username = row.get('username', '')
+                sekolah = row.get('sekolah', 'Semua Sekolah')
+                
+                with st.expander(f"👤 {username} — Unit Kerja: {sekolah}"):
+                    col_e1, col_e2 = st.columns(2)
+                    with col_e1:
+                        edit_user = st.text_input("Username", value=str(username), key=f"usr_{idx}")
+                        edit_pass = st.text_input("Password Baru", value=str(row.get('password', '')), type="password", key=f"pwd_{idx}")
+                    with col_e2:
+                        default_idx = opsi_sekolah_admin.index(sekolah) if sekolah in opsi_sekolah_admin else 0
+                        edit_sch = st.selectbox("Akses Sekolah", opsi_sekolah_admin, index=default_idx, key=f"sch_{idx}")
+                        
+                    col_b1, col_b2 = st.columns(2)
+                    with col_b1:
+                        if st.button("💾 Simpan Perubahan", key=f"save_adm_{idx}", type="primary", use_container_width=True):
+                            query = supabase.table('admins').update({
+                                'username': edit_user,
+                                'password': edit_pass,
+                                'sekolah': edit_sch
+                            })
+                            if pd.notna(admin_id):
+                                query = query.eq('id', admin_id)
+                            else:
+                                query = query.eq('username', username)
+                            query.execute()
+                            st.success(f"✅ Akun '{edit_user}' berhasil diperbarui!")
+                            time.sleep(1)
+                            st.rerun()
+                            
+                    with col_b2:
+                        if st.button("🗑️ Hapus Akun Admin", key=f"del_adm_{idx}", use_container_width=True):
+                            query = supabase.table('admins').delete()
+                            if pd.notna(admin_id):
+                                query = query.eq('id', admin_id)
+                            else:
+                                query = query.eq('username', username)
+                            query.execute()
+                            st.success(f"🗑️ Akun admin '{username}' berhasil dihapus!")
+                            time.sleep(1)
+                            st.rerun()
+
+    with tab4:
         st.markdown("### 📝 Input Keterangan Absensi (Manual)")
         
         if st.session_state.employees.empty:
@@ -758,7 +864,7 @@ elif st.session_state.role == "Superadmin":
                     else:
                         st.error("Harap unggah file bukti surat terlebih dahulu sebelum menyimpan.")
                         
-    with tab4:
+    with tab5:
         st.markdown("### Reset Data Sistem")
         st.warning("Perhatian! Menghapus data di sini tidak dapat dikembalikan.")
         col1, col2 = st.columns(2)
@@ -772,7 +878,7 @@ elif st.session_state.role == "Superadmin":
                 st.session_state.employees = pd.DataFrame()
                 st.success("Data pegawai telah di-reset!")
 
-    with tab5:
+    with tab6:
         st.markdown("### ⚙️ Pengaturan Batas Waktu Absensi")
         
         waktu_masuk_str = st.session_state.settings['batas_masuk'].iloc[0]
