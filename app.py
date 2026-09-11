@@ -159,17 +159,18 @@ def get_data_pengaturan():
     except Exception:
         return pd.DataFrame([{'batas_masuk': '07:30', 'batas_pulang': '16:00'}])
 
-def get_data_absensi():
-    try:
-        res = supabase.table('absensi').select('*').execute()
-        if res.data:
-            df = pd.DataFrame(res.data)
-            if 'nip' in df.columns:
-                df['nip'] = df['nip'].astype(str)
-            return df
-    except Exception:
-        pass
-    return pd.DataFrame(columns=['nip', 'nama', 'sekolah', 'tanggal', 'jam', 'jarak_m', 'status', 'foto_bukti'])
+# def get_data_absensi():
+#     try:
+#         res = supabase.table('absensi').select('*').execute()
+#         if res.data:
+#             df = pd.DataFrame(res.data)
+#             if 'nip' in df.columns:
+#                 df['nip'] = df['nip'].astype(str)
+#             return df
+#         return pd.DataFrame()
+#     except Exception as e:
+#         st.error(f"Gagal mengambil data absensi: {e}")
+#         return pd.DataFrame()
 
 # --- 5. INISIALISASI SESSION STATE ---
 if 'schools' not in st.session_state:
