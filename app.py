@@ -97,10 +97,13 @@ def get_data_pegawai():
         if res.data:
             df = pd.DataFrame(res.data)
             df['nip'] = df['nip'].astype(str)
+            # Pastikan kolom is_cadar ada untuk mencegah error
+            if 'is_cadar' not in df.columns:
+                df['is_cadar'] = False
             return df
     except Exception:
         pass
-    return pd.DataFrame(columns=['nip', 'name', 'school_name', 'photo_uploaded', 'photo_base64'])
+    return pd.DataFrame(columns=['nip', 'name', 'school_name', 'photo_uploaded', 'photo_base64', 'is_cadar'])
 
 def get_data_admin():
     try:
@@ -133,7 +136,7 @@ def get_data_absensi():
             return df
     except Exception:
         pass
-    return pd.DataFrame(columns=['nip', 'nama', 'sekolah', 'tanggal', 'jam', 'jarak_m', 'status'])
+    return pd.DataFrame(columns=['nip', 'nama', 'sekolah', 'tanggal', 'jam', 'jarak_m', 'status', 'foto_bukti'])
 
 # --- 5. INISIALISASI SESSION STATE ---
 if 'schools' not in st.session_state:
@@ -264,80 +267,102 @@ if st.session_state.role == "Pegawai":
             
             if jarak_meter <= sch_data['radius_m']:
                 st.success(f"✅ Lokasi Valid! Anda berada {jarak_meter:.0f} meter dari pusat sekolah.")
-                st.markdown("### Rekam Wajah")
+                st.markdown("### Rekam Kehadiran")
                 
-                is_uploaded = str(emp_data['photo_uploaded']).lower() == 'true'
+                # --- LOGIKA PENGECEKAN FOTO DAN CADAR ---
+                is_uploaded = str(emp_data.get('photo_uploaded', 'False')).lower() == 'true'
                 
-                if is_uploaded and pd.notna(emp_data['photo_base64']):
-                    img_camera = st.camera_input("Ambil Foto Wajah Anda")
+                is_cadar = emp_data.get('is_cadar', False)
+                if isinstance(is_cadar, str):
+                    is_cadar = is_cadar.lower() == 'true'
+                
+                # Jika bukan akun cadar dan belum ada foto acuan, blokir akses
+                if not is_cadar and not (is_uploaded and pd.notna(emp_data.get('photo_base64'))):
+                    st.warning("⚠️ Admin belum mengunggah foto acuan wajah Anda. Harap hubungi Admin.")
+                else:
+                    # Ambil foto live (Berlaku untuk akun normal dan cadar)
+                    img_camera = st.camera_input("Ambil Foto di Lokasi Sekolah")
+                    
                     if img_camera:
                         bytes_data = img_camera.getvalue()
                         cam_base64 = f"data:image/jpeg;base64,{base64.b64encode(bytes_data).decode('utf-8')}"
                         
-                        html_code = f"""
-                        <!DOCTYPE html>
-                        <html>
-                        <head><script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.12/dist/face-api.js"></script></head>
-                        <body style="text-align: center; font-family: sans-serif; margin:0; padding:5px;">
-                            <div id="status" style="color:#d9534f; font-weight:bold;">Memuat AI Verifikasi...</div>
-                            <div id="kode" style="display:none; color:white; background:#5cb85c; padding:8px 15px; border-radius:5px; font-weight:bold; font-size:18px;">✅ WAJAH COCOK</div>
-                            <img id="refImg" src="{emp_data['photo_base64']}" style="display:none;" />
-                            <img id="camImg" src="{cam_base64}" style="display:none;" />
-                            <script>
-                                async function runAI() {{
-                                    const status = document.getElementById('status');
-                                    try {{
-                                        const URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.12/model';
-                                        await faceapi.nets.ssdMobilenetv1.loadFromUri(URL);
-                                        await faceapi.nets.faceLandmark68Net.loadFromUri(URL);
-                                        await faceapi.nets.faceRecognitionNet.loadFromUri(URL);
-                                        
-                                        const ref = await faceapi.detectSingleFace(document.getElementById('refImg')).withFaceLandmarks().withFaceDescriptor();
-                                        const cam = await faceapi.detectSingleFace(document.getElementById('camImg')).withFaceLandmarks().withFaceDescriptor();
-                                        
-                                        if(!ref || !cam) {{ status.innerText = "⚠️ Wajah tidak terdeteksi jelas pada kamera."; return; }}
-                                        
-                                        const match = new faceapi.FaceMatcher(ref).findBestMatch(cam.descriptor);
-                                        if(match.distance <= 0.5) {{ 
-                                            status.style.display = "none";
-                                            document.getElementById('kode').style.display = "inline-block";
+                        if not is_cadar:
+                            # ==========================================
+                            # LOGIKA 1: PEGAWAI NORMAL (VERIFIKASI AI)
+                            # ==========================================
+                            html_code = f"""
+                            <!DOCTYPE html>
+                            <html>
+                            <head><script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.12/dist/face-api.js"></script></head>
+                            <body style="text-align: center; font-family: sans-serif; margin:0; padding:5px;">
+                                <div id="status" style="color:#d9534f; font-weight:bold;">Memuat AI Verifikasi...</div>
+                                <div id="kode" style="display:none; color:white; background:#5cb85c; padding:8px 15px; border-radius:5px; font-weight:bold; font-size:18px;">✅ WAJAH COCOK</div>
+                                <img id="refImg" src="{emp_data.get('photo_base64', '')}" style="display:none;" />
+                                <img id="camImg" src="{cam_base64}" style="display:none;" />
+                                <script>
+                                    async function runAI() {{
+                                        const status = document.getElementById('status');
+                                        try {{
+                                            const URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.12/model';
+                                            await faceapi.nets.ssdMobilenetv1.loadFromUri(URL);
+                                            await faceapi.nets.faceLandmark68Net.loadFromUri(URL);
+                                            await faceapi.nets.faceRecognitionNet.loadFromUri(URL);
                                             
-                                            try {{
-                                                const btns = window.parent.document.querySelectorAll('button');
-                                                btns.forEach(btn => {{
-                                                    if(btn.innerText.includes("MASUK") || btn.innerText.includes("PULANG")) {{
-                                                        btn.style.pointerEvents = "auto";
-                                                        btn.style.opacity = "1";
-                                                        btn.style.filter = "none";
-                                                    }}
-                                                }});
-                                            }} catch(err) {{}}
+                                            const ref = await faceapi.detectSingleFace(document.getElementById('refImg')).withFaceLandmarks().withFaceDescriptor();
+                                            const cam = await faceapi.detectSingleFace(document.getElementById('camImg')).withFaceLandmarks().withFaceDescriptor();
                                             
-                                        }} else {{ status.innerText = "⛔ WAJAH TIDAK COCOK!"; }}
-                                    }} catch(e) {{ status.innerText = "Gagal memuat sistem verifikasi AI."; }}
-                                }}
-                                setTimeout(runAI, 500);
-                            </script>
-                        </body>
-                        </html>
-                        """
-                        components.html(html_code, height=60, scrolling=False)
-                        
-                        components.html("""
-                            <script>
-                            try {
-                                const btns = window.parent.document.querySelectorAll('button');
-                                btns.forEach(btn => {
-                                    if(btn.innerText.includes("MASUK") || btn.innerText.includes("PULANG")) {
-                                        btn.style.pointerEvents = "none";
-                                        btn.style.opacity = "0.3";
-                                        btn.style.filter = "grayscale(100%)";
-                                    }
-                                });
-                            } catch(err) {}
-                            </script>
-                        """, height=0, width=0)
+                                            if(!ref || !cam) {{ status.innerText = "⚠️ Wajah tidak terdeteksi jelas pada kamera."; return; }}
+                                            
+                                            const match = new faceapi.FaceMatcher(ref).findBestMatch(cam.descriptor);
+                                            if(match.distance <= 0.5) {{ 
+                                                status.style.display = "none";
+                                                document.getElementById('kode').style.display = "inline-block";
+                                                
+                                                try {{
+                                                    const btns = window.parent.document.querySelectorAll('button');
+                                                    btns.forEach(btn => {{
+                                                        if(btn.innerText.includes("MASUK") || btn.innerText.includes("PULANG")) {{
+                                                            btn.style.pointerEvents = "auto";
+                                                            btn.style.opacity = "1";
+                                                            btn.style.filter = "none";
+                                                        }}
+                                                    }});
+                                                }} catch(err) {{}}
+                                                
+                                            }} else {{ status.innerText = "⛔ WAJAH TIDAK COCOK!"; }}
+                                        }} catch(e) {{ status.innerText = "Gagal memuat sistem verifikasi AI."; }}
+                                    }}
+                                    setTimeout(runAI, 500);
+                                </script>
+                            </body>
+                            </html>
+                            """
+                            components.html(html_code, height=60, scrolling=False)
+                            
+                            # Kunci tombol sementara
+                            components.html("""
+                                <script>
+                                try {
+                                    const btns = window.parent.document.querySelectorAll('button');
+                                    btns.forEach(btn => {
+                                        if(btn.innerText.includes("MASUK") || btn.innerText.includes("PULANG")) {
+                                            btn.style.pointerEvents = "none";
+                                            btn.style.opacity = "0.3";
+                                            btn.style.filter = "grayscale(100%)";
+                                        }
+                                    });
+                                } catch(err) {}
+                                </script>
+                            """, height=0, width=0)
+                            
+                        else:
+                            # ==========================================
+                            # LOGIKA 2: PEGAWAI CADAR (BYPASS AI)
+                            # ==========================================
+                            st.info("🧕 **Akun Terotorisasi:** Verifikasi biometrik dilewati. Kehadiran divalidasi melalui GPS dan Foto Bukti.")
 
+                        # --- TOMBOL PRESENSI ---
                         col_masuk, col_pulang = st.columns(2)
                         with col_masuk:
                             btn_masuk = st.button("📥 MASUK", type="primary", width="stretch")
@@ -374,15 +399,13 @@ if st.session_state.role == "Pegawai":
                                 batas_pulang_obj = datetime.datetime.strptime(batas_pulang_str, '%H:%M').time()
                                 
                                 if btn_masuk:
-                                    if jam_sekarang > batas_masuk_obj:
-                                        jenis_absen = "Masuk (TERLAMBAT)"
-                                    else:
-                                        jenis_absen = "Masuk (Tepat Waktu)"
+                                    jenis_absen = "Masuk (TERLAMBAT)" if jam_sekarang > batas_masuk_obj else "Masuk (Tepat Waktu)"
                                 else:
-                                    if jam_sekarang < batas_pulang_obj:
-                                        jenis_absen = "Pulang (LEBIH AWAL)"
-                                    else:
-                                        jenis_absen = "Pulang (Tepat Waktu)"
+                                    jenis_absen = "Pulang (LEBIH AWAL)" if jam_sekarang < batas_pulang_obj else "Pulang (Tepat Waktu)"
+
+                                status_final = f'Hadir - {jenis_absen}'
+                                if is_cadar:
+                                    status_final = f'Hadir [Audit Manual] - {jenis_absen}'
 
                                 data_absen_baru = {
                                     'nip': str(emp_data['nip']), 
@@ -391,13 +414,12 @@ if st.session_state.role == "Pegawai":
                                     'tanggal': tgl_sekarang, 
                                     'jam': now.strftime('%H:%M:%S'),
                                     'jarak_m': str(round(jarak_meter, 1)), 
-                                    'status': f'Hadir - {jenis_absen}'
+                                    'status': status_final,
+                                    'foto_bukti': cam_base64 # Simpan foto bukti di database
                                 }
                                 
                                 supabase.table('absensi').insert(data_absen_baru).execute()
                                 st.success(f"✅ Absensi {jenis_absen} Anda berhasil tersimpan!")
-                else:
-                    st.warning("Admin belum mengunggah foto acuan Anda.")
             else:
                 st.error(f"⛔ Akses Ditolak! Jarak Anda {jarak_meter:.0f} meter. Anda berada di luar radius {sch_data['radius_m']} meter.")
         else:
@@ -456,11 +478,13 @@ elif st.session_state.role == "Admin":
                 nip = str(emp['nip'])
                 nama = emp['name']
                 sekolah_emp = emp['school_name']
+                is_cadar = str(emp.get('is_cadar', 'False')).lower() == 'true'
                 
                 is_uploaded = str(emp.get('photo_uploaded', False)).lower() == 'true'
-                status_simbol = "🟢" if is_uploaded else "🔴"
+                status_simbol = "🧕" if is_cadar else ("🟢" if is_uploaded else "🔴")
+                status_teks = "Mode Cadar (Audit)" if is_cadar else ""
                 
-                with st.expander(f"{status_simbol} {nama} — NIP: {nip}"):
+                with st.expander(f"{status_simbol} {nama} — NIP: {nip} {status_teks}"):
                     col_kiri, col_kanan = st.columns([1, 2])
                     
                     with col_kiri:
@@ -580,6 +604,8 @@ elif st.session_state.role == "Admin":
                     return 'color: #D9534F; font-weight: bold;'
                 elif 'Tepat Waktu' in val:
                     return 'color: #5CB85C; font-weight: bold;'
+                elif 'Audit' in val:
+                    return 'color: #0275d8; font-style: italic;'
                 elif val == 'Tanpa Keterangan':
                     return 'color: #F0AD4E;'
             return ''
@@ -587,12 +613,10 @@ elif st.session_state.role == "Admin":
         df_berwarna = df_rekap.style.map(warnai_status, subset=['STATUS'])
         
         st.dataframe(df_berwarna, width="stretch")
-        # Buat buffer untuk file Excel di dalam memori
         buffer = io.BytesIO()
         with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
             df_rekap.to_excel(writer, index=False, sheet_name='Rekap Absensi')
             
-        # Tombol download baru dengan format .xlsx
         st.download_button(
             label="📥 Download Rekap Absensi (Excel)",
             data=buffer.getvalue(),
@@ -685,7 +709,8 @@ elif st.session_state.role == "Superadmin":
                         'name': new_name,
                         'school_name': new_school,
                         'photo_uploaded': False,
-                        'photo_base64': ''
+                        'photo_base64': '',
+                        'is_cadar': False
                     }
                     supabase.table('pegawai').insert(data_pegawai_baru).execute()
                     st.session_state.employees = get_data_pegawai()
@@ -713,6 +738,7 @@ elif st.session_state.role == "Superadmin":
                     if all(col in df_upload.columns for col in ['nip', 'name', 'school_name']):
                         df_upload['photo_uploaded'] = False
                         df_upload['photo_base64'] = ''
+                        df_upload['is_cadar'] = False
                         df_upload['nip'] = df_upload['nip'].astype(str)
                         
                         records = df_upload.to_dict(orient='records')
@@ -729,7 +755,6 @@ elif st.session_state.role == "Superadmin":
         st.write("---")
         st.markdown("### 📋 Edit & Kelola Daftar Pegawai Aktif")
         
-        # Filter Berdasarkan Sekolah
         opsi_sekolah_filter = ["Semua Sekolah"]
         if not st.session_state.schools.empty:
             opsi_sekolah_filter += st.session_state.schools['school_name'].tolist()
@@ -766,14 +791,21 @@ elif st.session_state.role == "Superadmin":
                 nama_old = emp['name']
                 sekolah_old = emp['school_name']
                 is_uploaded = str(emp.get('photo_uploaded', False)).lower() == 'true'
+                is_cadar_old = str(emp.get('is_cadar', False)).lower() == 'true'
                 
                 status_kunci = "🔒 Foto Terkunci" if is_uploaded else "🔓 Foto Belum Diunggah"
+                if is_cadar_old:
+                    status_kunci += " (🧕 Mode Cadar Aktif)"
                 
                 with st.expander(f"👤 {nama_old} — NIP: {nip_old} ({status_kunci})"):
                     col_e1, col_e2 = st.columns(2)
                     with col_e1:
                         edit_nip = st.text_input("NIP Pegawai", value=nip_old, key=f"nip_edit_{nip_old}")
                         edit_nama = st.text_input("Nama Pegawai", value=nama_old, key=f"nama_edit_{nip_old}")
+                        
+                        # Tambahan Toggle Mode Cadar di Superadmin
+                        edit_cadar = st.checkbox("🧕 Izinkan Mode Cadar (Bypass AI)", value=is_cadar_old, key=f"cadar_edit_{nip_old}")
+                        
                     with col_e2:
                         list_sch = st.session_state.schools['school_name'].tolist() if not st.session_state.schools.empty else [sekolah_old]
                         default_sch_idx = list_sch.index(sekolah_old) if sekolah_old in list_sch else 0
@@ -801,7 +833,8 @@ elif st.session_state.role == "Superadmin":
                             supabase.table('pegawai').update({
                                 'nip': str(edit_nip),
                                 'name': edit_nama,
-                                'school_name': edit_sekolah
+                                'school_name': edit_sekolah,
+                                'is_cadar': edit_cadar
                             }).eq('nip', nip_old).execute()
                             
                             st.session_state.employees = get_data_pegawai()
@@ -938,7 +971,8 @@ elif st.session_state.role == "Superadmin":
                                 'tanggal': tgl.strftime('%Y-%m-%d'), 
                                 'jam': '-',
                                 'jarak_m': 'Dilampirkan Surat', 
-                                'status': jenis_absen
+                                'status': jenis_absen,
+                                'foto_bukti': ''
                             })
                             
                         supabase.table('absensi').insert(list_absen).execute()
