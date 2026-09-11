@@ -192,7 +192,6 @@ if st.session_state.role is None:
                     if not match.empty:
                         is_valid = True
                 
-                # Fallback default login jika belum ada data di database
                 if is_valid or (input_user_admin == "admin" and pwd == "admin123") or (pwd == "admin123" and not input_user_admin):
                     st.session_state.role = "Admin"
                     cookie_manager.set("role", "Admin")
@@ -421,11 +420,9 @@ elif st.session_state.role == "Admin":
     else:
         st.markdown("### 📸 1. Kelola Foto Acuan Pegawai")
         
-        # 1. Filter Berdasarkan Sekolah
         opsi_sekolah_foto = ["Semua Sekolah"] + st.session_state.schools['school_name'].tolist()
         sekolah_pilihan_foto = st.selectbox("🏢 Filter Sekolah:", opsi_sekolah_foto, key="filter_sekolah_foto")
         
-        # 2. Saring Data Pegawai
         df_kandidat = st.session_state.employees.copy()
         if sekolah_pilihan_foto != "Semua Sekolah":
             df_kandidat = df_kandidat[df_kandidat['school_name'] == sekolah_pilihan_foto]
@@ -435,7 +432,6 @@ elif st.session_state.role == "Admin":
         if total_pegawai == 0:
             st.info("Tidak ada pegawai di sekolah ini.")
         else:
-            # 3. Sistem Paginasi (10 per halaman)
             items_per_page = 10
             total_pages = (total_pegawai // items_per_page) + (1 if total_pegawai % items_per_page > 0 else 0)
             
@@ -449,25 +445,21 @@ elif st.session_state.role == "Admin":
                 else:
                     page = 1
                     
-            # 4. Potong Data Sesuai Halaman
             start_idx = (page - 1) * items_per_page
             end_idx = start_idx + items_per_page
             df_page = df_kandidat.iloc[start_idx:end_idx]
             
             st.write("---")
             
-            # 5. Tampilan List Expandable Menarik
             for index, emp in df_page.iterrows():
                 nip = str(emp['nip'])
                 nama = emp['name']
                 sekolah_emp = emp['school_name']
                 
-                # Indikator warna status foto
                 is_uploaded = str(emp.get('photo_uploaded', False)).lower() == 'true'
                 status_simbol = "🟢" if is_uploaded else "🔴"
                 
                 with st.expander(f"{status_simbol} {nama} — NIP: {nip}"):
-                    # Membagi konten laci menjadi 2 kolom
                     col_kiri, col_kanan = st.columns([1, 2])
                     
                     with col_kiri:
@@ -484,19 +476,15 @@ elif st.session_state.role == "Admin":
                         foto = st.file_uploader("Pilih Pas Foto Baru", type=['jpg', 'jpeg', 'png'], key=f"foto_{nip}")
                         
                         if foto and st.button("💾 Simpan & Update Foto", type="primary", key=f"btn_{nip}", use_container_width=True):
-                            # Konversi file ke format Base64
                             base64_str = base64.b64encode(foto.getvalue()).decode('utf-8')
                             full_base64 = f"data:image/jpeg;base64,{base64_str}"
                             
-                            # Update tabel pegawai di Supabase
                             supabase.table('pegawai').update({
                                 'photo_uploaded': True,
                                 'photo_base64': full_base64
                             }).eq('nip', nip).execute()
                             
                             st.success("✅ Foto berhasil diperbarui!")
-                            
-                            # Refresh data dan halaman
                             st.session_state.employees = get_data_pegawai()
                             time.sleep(1)
                             st.rerun()
@@ -680,7 +668,8 @@ elif st.session_state.role == "Superadmin":
         with st.form("form_tambah_pegawai"):
             new_nip = st.text_input("NIP")
             new_name = st.text_input("Nama Lengkap")
-            new_school = st.selectbox("Penempatan Sekolah", st.session_state.schools['school_name'].tolist())
+            opsi_sekolah_input = st.session_state.schools['school_name'].tolist() if not st.session_state.schools.empty else []
+            new_school = st.selectbox("Penempatan Sekolah", opsi_sekolah_input)
             
             if st.form_submit_button("Tambahkan Manual"):
                 if new_nip and new_name:
@@ -695,6 +684,8 @@ elif st.session_state.role == "Superadmin":
                     st.session_state.employees = get_data_pegawai()
                     st.success(f"Pegawai ditambahkan ke {new_school}!")
                     st.rerun()
+                else:
+                    st.error("NIP dan Nama Pegawai wajib diisi.")
         
         st.write("---")
         st.markdown("### 2. Tambah Pegawai (Upload Excel/CSV Massal)")
@@ -729,14 +720,99 @@ elif st.session_state.role == "Superadmin":
                     st.error(f"Gagal membaca file: {e}")
 
         st.write("---")
-        st.markdown("### Daftar Pegawai Aktif")
-        if not st.session_state.employees.empty:
-            st.dataframe(st.session_state.employees[['nip', 'name', 'school_name', 'photo_uploaded']])
+        st.markdown("### 📋 Edit & Kelola Daftar Pegawai Aktif")
+        
+        # Filter Berdasarkan Sekolah
+        opsi_sekolah_filter = ["Semua Sekolah"]
+        if not st.session_state.schools.empty:
+            opsi_sekolah_filter += st.session_state.schools['school_name'].tolist()
+            
+        sekolah_pilihan_peg = st.selectbox("🏢 Filter Berdasarkan Sekolah:", opsi_sekolah_filter, key="filter_sekolah_pegawai")
+        
+        df_peg_filtered = st.session_state.employees.copy()
+        if sekolah_pilihan_peg != "Semua Sekolah":
+            df_peg_filtered = df_peg_filtered[df_peg_filtered['school_name'] == sekolah_pilihan_peg]
+            
+        total_peg = len(df_peg_filtered)
+        
+        if total_peg == 0:
+            st.info("Tidak ada data pegawai yang ditemukan.")
+        else:
+            items_per_page = 10
+            total_pages = (total_peg // items_per_page) + (1 if total_peg % items_per_page > 0 else 0)
+            
+            col_info, col_page = st.columns([1, 1])
+            with col_info:
+                st.caption(f"Menampilkan total **{total_peg}** pegawai.")
+            with col_page:
+                if total_pages > 1:
+                    page_peg = st.selectbox("📄 Halaman:", range(1, total_pages + 1), format_func=lambda x: f"Halaman {x} dari {total_pages}", key="page_pegawai")
+                else:
+                    page_peg = 1
+                
+            start_idx = (page_peg - 1) * items_per_page
+            end_idx = start_idx + items_per_page
+            df_page_peg = df_peg_filtered.iloc[start_idx:end_idx]
+            
+            for idx, emp in df_page_peg.iterrows():
+                nip_old = str(emp['nip'])
+                nama_old = emp['name']
+                sekolah_old = emp['school_name']
+                is_uploaded = str(emp.get('photo_uploaded', False)).lower() == 'true'
+                
+                status_kunci = "🔒 Foto Terkunci" if is_uploaded else "🔓 Foto Belum Diunggah"
+                
+                with st.expander(f"👤 {nama_old} — NIP: {nip_old} ({status_kunci})"):
+                    col_e1, col_e2 = st.columns(2)
+                    with col_e1:
+                        edit_nip = st.text_input("NIP Pegawai", value=nip_old, key=f"nip_edit_{nip_old}")
+                        edit_nama = st.text_input("Nama Pegawai", value=nama_old, key=f"nama_edit_{nip_old}")
+                    with col_e2:
+                        list_sch = st.session_state.schools['school_name'].tolist() if not st.session_state.schools.empty else [sekolah_old]
+                        default_sch_idx = list_sch.index(sekolah_old) if sekolah_old in list_sch else 0
+                        edit_sekolah = st.selectbox("Penempatan Sekolah", list_sch, index=default_sch_idx, key=f"sch_edit_{nip_old}")
+                        
+                        st.markdown("**Status Foto Verifikasi:**")
+                        if is_uploaded:
+                            st.warning("Foto acuan sudah diunggah oleh Admin.")
+                            if st.button("🔓 Buka Kunci Foto (Reset Foto)", key=f"unlock_foto_{nip_old}", use_container_width=True):
+                                supabase.table('pegawai').update({
+                                    'photo_uploaded': False,
+                                    'photo_base64': ''
+                                }).eq('nip', nip_old).execute()
+                                
+                                st.session_state.employees = get_data_pegawai()
+                                st.success(f"✅ Kunci foto pegawai {nama_old} berhasil dibuka!")
+                                time.sleep(1)
+                                st.rerun()
+                        else:
+                            st.info("Belum ada foto acuan (Siap diunggah oleh Admin).")
+                            
+                    col_btn1, col_btn2 = st.columns(2)
+                    with col_btn1:
+                        if st.button("💾 Simpan Perubahan Data", key=f"save_peg_{nip_old}", type="primary", use_container_width=True):
+                            supabase.table('pegawai').update({
+                                'nip': str(edit_nip),
+                                'name': edit_nama,
+                                'school_name': edit_sekolah
+                            }).eq('nip', nip_old).execute()
+                            
+                            st.session_state.employees = get_data_pegawai()
+                            st.success(f"✅ Data {edit_nama} berhasil diperbarui!")
+                            time.sleep(1)
+                            st.rerun()
+                            
+                    with col_btn2:
+                        if st.button("🗑️ Hapus Pegawai", key=f"del_peg_{nip_old}", use_container_width=True):
+                            supabase.table('pegawai').delete().eq('nip', nip_old).execute()
+                            st.session_state.employees = get_data_pegawai()
+                            st.success(f"🗑️ Pegawai {nama_old} berhasil dihapus!")
+                            time.sleep(1)
+                            st.rerun()
 
     with tab3:
         st.markdown("### 🔑 Kelola Akun Admin")
         
-        # 1. Form Tambah Akun Admin
         with st.form("form_tambah_admin"):
             st.markdown("##### ➕ Tambah Akun Admin Baru")
             new_admin_user = st.text_input("Username Admin")
@@ -859,7 +935,6 @@ elif st.session_state.role == "Superadmin":
                             })
                             
                         supabase.table('absensi').insert(list_absen).execute()
-                        
                         st.success(f"Berhasil! Absensi {jenis_absen} untuk {pilihan_pegawai} dari {tanggal_mulai.strftime('%d-%m-%Y')} s/d {tanggal_selesai.strftime('%d-%m-%Y')} telah tercatat.")
                     else:
                         st.error("Harap unggah file bukti surat terlebih dahulu sebelum menyimpan.")
