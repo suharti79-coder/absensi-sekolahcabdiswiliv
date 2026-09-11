@@ -169,19 +169,19 @@ def logout():
 # HALAMAN LOGIN UTAMA
 # ==========================================
 if st.session_state.role is None:
-    # Membuat 3 kolom untuk memposisikan logo di tengah
-col_kiri, col_tengah, col_kanan = st.columns([1, 1.5, 1])
+    # 1. Pastikan semua baris di bawah 'if' ini menjorok ke kanan (di-Tab)
+    col_kiri, col_tengah, col_kanan = st.columns([1, 1.5, 1])
 
-# Menampilkan gambar di kolom tengah
-with col_tengah:
-    # Pastikan nama file sesuai persis dengan yang ada di GitHub
-    st.image("LOGO APK ABSENSI SEKOLAH_2.jpg", use_container_width=True)
+    # 2. Menampilkan gambar di kolom tengah
+    with col_tengah:
+        st.image("LOGO APK ABSENSI SEKOLAH_2.jpg", use_container_width=True)
 
-# Membuat judul baru tanpa ikon emoji, dengan posisi rata tengah
-st.markdown("<h2 style='text-align: center; color: #0F2C59; margin-top: -15px;'>Portal Presensi Sekolah CABDIS WIL IV</h2>", unsafe_allow_html=True)
+    # 3. Membuat judul baru tanpa ikon emoji, dengan posisi rata tengah
+    st.markdown("<h2 style='text-align: center; color: #0F2C59; margin-top: -15px;'>Portal Presensi Sekolah CABDIS WIL IV</h2>", unsafe_allow_html=True)
+    
     st.info("Selamat datang! Untuk merekam kehadiran Anda, silakan klik tombol di bawah ini.")
     
-    if st.button("📸 Mulai Presensi Wajah & GPS", type="primary", width="stretch"):
+    if st.button("📸 Mulai Presensi Wajah & GPS", type="primary", use_container_width=True):
         st.session_state.role = "Pegawai"
         cookie_manager.set("role", "Pegawai")
         time.sleep(0.5)
@@ -194,29 +194,20 @@ st.markdown("<h2 style='text-align: center; color: #0F2C59; margin-top: -15px;'>
     
     with col_admin:
         with st.expander("🔑 Login Admin"):
-            input_user_admin = st.text_input("Username Admin:", key="user_admin_main")
             pwd = st.text_input("Password Admin:", type="password", key="pwd_admin_main")
-            if st.button("Masuk Admin", width="stretch", key="btn_admin_main"):
-                df_adm = get_data_admin()
-                is_valid = False
-                
-                if not df_adm.empty and 'username' in df_adm.columns:
-                    match = df_adm[(df_adm['username'] == input_user_admin) & (df_adm['password'] == pwd)]
-                    if not match.empty:
-                        is_valid = True
-                
-                if is_valid or (input_user_admin == "admin" and pwd == "admin123") or (pwd == "admin123" and not input_user_admin):
+            if st.button("Masuk Admin", use_container_width=True, key="btn_admin_main"):
+                if pwd == "admin123":
                     st.session_state.role = "Admin"
                     cookie_manager.set("role", "Admin")
                     time.sleep(0.5)
                     st.rerun()
                 else: 
-                    st.error("Username atau Password Salah!")
+                    st.error("Password Salah!")
                     
     with col_super:
         with st.expander("🛠️ Login Superadmin"):
             pwd_super = st.text_input("Password Superadmin:", type="password", key="pwd_super_main")
-            if st.button("Masuk Superadmin", width="stretch", key="btn_super_main"):
+            if st.button("Masuk Superadmin", use_container_width=True, key="btn_super_main"):
                 if pwd_super == "superadmin123":
                     st.session_state.role = "Superadmin"
                     cookie_manager.set("role", "Superadmin")
