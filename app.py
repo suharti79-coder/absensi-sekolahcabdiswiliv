@@ -82,7 +82,8 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- 4. FUNGSI INTERAKSI DATABASE SUPABASE ---
+# --- 4. FUNGSI INTERAKSI DATABASE SUPABASE (SUDAH DI-OPTIMASI DENGAN CACHE) ---
+@st.cache_data(ttl=60)
 def get_data_sekolah():
     try:
         res = supabase.table('sekolah').select('*').execute()
@@ -92,6 +93,7 @@ def get_data_sekolah():
         pass
     return pd.DataFrame(columns=['school_name', 'lat', 'lng', 'radius_m'])
 
+@st.cache_data(ttl=60)
 def get_data_pegawai():
     try:
         res = supabase.table('pegawai').select('*').execute()
@@ -103,6 +105,7 @@ def get_data_pegawai():
         pass
     return pd.DataFrame(columns=['nip', 'name', 'school_name', 'photo_uploaded', 'photo_base64'])
 
+@st.cache_data(ttl=300)
 def get_data_pengaturan():
     try:
         res = supabase.table('pengaturan').select('*').execute()
@@ -116,6 +119,7 @@ def get_data_pengaturan():
         return pd.DataFrame([{'batas_masuk': '07:30', 'batas_pulang': '16:00'}])
 
 def get_data_absensi():
+    # Tidak di-cache agar rekap absensi selalu real-time
     try:
         res = supabase.table('absensi').select('*').execute()
         if res.data:
@@ -158,7 +162,7 @@ def logout():
 # HALAMAN LOGIN UTAMA
 # ==========================================
 if st.session_state.role is None:
-    st.title("📍 Portal Absensi Cabdis Wil IV")
+    st.title("📍 Portal Presensi Terpadu")
     st.info("Selamat datang! Untuk merekam kehadiran Anda, silakan klik tombol di bawah ini.")
     
     if st.button("📸 Mulai Presensi Wajah & GPS", type="primary", width="stretch"):
@@ -403,37 +407,60 @@ elif st.session_state.role == "Admin":
          st.warning("Belum ada data pegawai. Minta Superadmin menambah pegawai terlebih dahulu.")
     else:
         st.markdown("### 1. Upload Foto Acuan")
-        pilihan_guru = st.selectbox("Pilih Pegawai:", st.session_state.employees['name'].tolist())
-        emp_selected = st.session_state.employees[st.session_state.employees['name'] == pilihan_guru].iloc[0]
         
-        foto = st.file_uploader("Upload Pas Foto", type=['jpg', 'jpeg', 'png'])
-        if foto and st.button("Simpan Foto"):
+        # Menambahkan filter dropdown untuk sekolah
+        opsi_sekolah_foto = ["Semua Sekolah"] + st.session_state.schools['school_name'].tolist()
+        sekolah_pilihan_foto = st.selectbox("Pilih Sekolah:", opsi_sekolah_foto, key="filter_sekolah_foto")
+        
+        # Menyaring data pegawai berdasarkan sekolah yang dipilih
+        df_kandidat = st.session_state.employees.copy()
+        if sekolah_pilihan_foto != "Semua Sekolah":
+            df_kandidat = df_kandidat[df_kandidat['school_name'] == sekolah_pilihan_foto]
             
-            # --- PROSES KOMPRESI GAMBAR ---
-            # Mengubah input stream file ke bentuk numpy array
-            file_bytes = np.asarray(bytearray(foto.getvalue()), dtype=np.uint8)
-            img = cv2.imdecode(file_bytes, 1)
-            
-            # Mengatur ukuran gambar maksimal ke 400 pixel (mempertahankan rasio/proporsi)
-            h, w = img.shape[:2]
-            max_dim = 400
-            if max(h, w) > max_dim:
-                scale = max_dim / max(h, w)
-                img = cv2.resize(img, (int(w * scale), int(h * scale)))
+        st.caption(f"Menampilkan {len(df_kandidat)} pegawai.")
+        
+        if df_kandidat.empty:
+            st.info("Tidak ada pegawai di sekolah ini.")
+        else:
+            # Menampilkan setiap pegawai dalam bentuk list yang bisa di-klik (expander)
+            for index, emp in df_kandidat.iterrows():
+                nip = str(emp['nip'])
+                nama = emp['name']
                 
-            # Mengkompresi ke dalam bentuk .jpg dengan kualitas 60%
-            _, buffer = cv2.imencode('.jpg', img, [int(cv2.IMWRITE_JPEG_QUALITY), 60])
-            base64_str = base64.b64encode(buffer).decode('utf-8')
-            full_base64 = f"data:image/jpeg;base64,{base64_str}"
-            # --- AKHIR PROSES KOMPRESI ---
-            
-            supabase.table('pegawai').update({
-                'photo_uploaded': True,
-                'photo_base64': full_base64
-            }).eq('nip', str(emp_selected['nip'])).execute()
-            
-            st.session_state.employees = get_data_pegawai()
-            st.success("Foto dikunci dan disimpan secara permanen di database!")
+                # Cek apakah pegawai sudah punya foto
+                is_uploaded = str(emp.get('photo_uploaded', False)).lower() == 'true'
+                ikon_status = "✅ Punya Foto" if is_uploaded else "❌ Belum Ada Foto"
+                
+                with st.expander(f"{nama} ({nip}) - {ikon_status}"):
+                    if is_uploaded:
+                        st.success("Pegawai ini sudah memiliki foto acuan aktif. Mengunggah foto baru akan menimpa foto lama.")
+                    
+                    foto = st.file_uploader("Pilih Pas Foto", type=['jpg', 'jpeg', 'png'], key=f"foto_{nip}")
+                    
+                    if foto and st.button("Simpan Foto", type="primary", key=f"btn_{nip}"):
+                        # --- PROSES KOMPRESI GAMBAR ---
+                        file_bytes = np.asarray(bytearray(foto.getvalue()), dtype=np.uint8)
+                        img = cv2.imdecode(file_bytes, 1)
+                        
+                        h, w = img.shape[:2]
+                        max_dim = 400
+                        if max(h, w) > max_dim:
+                            scale = max_dim / max(h, w)
+                            img = cv2.resize(img, (int(w * scale), int(h * scale)))
+                            
+                        _, buffer = cv2.imencode('.jpg', img, [int(cv2.IMWRITE_JPEG_QUALITY), 60])
+                        base64_str = base64.b64encode(buffer).decode('utf-8')
+                        full_base64 = f"data:image/jpeg;base64,{base64_str}"
+                        # --- AKHIR PROSES KOMPRESI ---
+                        
+                        supabase.table('pegawai').update({
+                            'photo_uploaded': True,
+                            'photo_base64': full_base64
+                        }).eq('nip', nip).execute()
+                        
+                        st.cache_data.clear()
+                        st.session_state.employees = get_data_pegawai()
+                        st.rerun()
 
     st.markdown("### 2. Laporan & Rekap Absensi")
     
@@ -576,6 +603,7 @@ elif st.session_state.role == "Superadmin":
                         'radius_m': new_rad
                     }
                     supabase.table('sekolah').insert(data_sekolah_baru).execute()
+                    st.cache_data.clear() # Bersihkan memori
                     st.session_state.schools = get_data_sekolah()
                     st.success(f"Sekolah {new_sch_name} berhasil ditambahkan!")
                     st.rerun()
@@ -598,6 +626,7 @@ elif st.session_state.role == "Superadmin":
             records = edited_schools.to_dict(orient='records')
             if records:
                 supabase.table('sekolah').insert(records).execute()
+            st.cache_data.clear() # Bersihkan memori
             st.session_state.schools = get_data_sekolah()
             st.success("Perubahan data sekolah berhasil disimpan secara permanen!")
             st.rerun()
@@ -619,6 +648,7 @@ elif st.session_state.role == "Superadmin":
                         'photo_base64': ''
                     }
                     supabase.table('pegawai').insert(data_pegawai_baru).execute()
+                    st.cache_data.clear() # Bersihkan memori
                     st.session_state.employees = get_data_pegawai()
                     st.success(f"Pegawai ditambahkan ke {new_school}!")
                     st.rerun()
@@ -646,6 +676,7 @@ elif st.session_state.role == "Superadmin":
                         
                         records = df_upload.to_dict(orient='records')
                         supabase.table('pegawai').upsert(records, on_conflict='nip').execute()
+                        st.cache_data.clear() # Bersihkan memori
                         st.session_state.employees = get_data_pegawai()
                         
                         st.success(f"Berhasil mengunggah {len(df_upload)} data pegawai!")
@@ -722,6 +753,7 @@ elif st.session_state.role == "Superadmin":
         with col2:
             if st.button("🚨 Reset Semua Pegawai"):
                 supabase.table('pegawai').delete().neq('nip', '').execute()
+                st.cache_data.clear() # Bersihkan memori
                 st.session_state.employees = pd.DataFrame()
                 st.success("Data pegawai telah di-reset!")
 
@@ -745,6 +777,7 @@ elif st.session_state.role == "Superadmin":
                 }
                 supabase.table('pengaturan').delete().neq('batas_masuk', '').execute()
                 supabase.table('pengaturan').insert(updated_settings).execute()
+                st.cache_data.clear() # Bersihkan memori
                 st.session_state.settings = get_data_pengaturan()
                 st.success("✅ Pengaturan jam kerja berhasil diperbarui di database!")
                 st.rerun()
