@@ -1037,16 +1037,27 @@ elif st.session_state.role == "Superadmin":
     with tab5:
         st.markdown("### Reset Data Sistem")
         st.warning("Perhatian! Menghapus data di sini tidak dapat dikembalikan.")
-        col1, col2 = st.columns(2)
+        
+        # Ubah menjadi 3 kolom untuk mengakomodasi tombol baru
+        col1, col2, col3 = st.columns(3)
+        
         with col1:
             if st.button("🗑️ Kosongkan Data Absensi"):
                 supabase.table('absensi').delete().neq('nip', '').execute()
                 st.success("Tabel absensi di database dibersihkan!")
+                
         with col2:
             if st.button("🚨 Reset Semua Pegawai"):
                 supabase.table('pegawai').delete().neq('nip', '').execute()
                 st.session_state.employees = pd.DataFrame()
                 st.success("Data pegawai telah di-reset!")
+                
+        with col3:
+            if st.button("🖼️ Hapus Foto Absensi"):
+                # Hanya mengosongkan kolom 'foto_bukti' (hasil rekam wajah saat absen), 
+                # data teks kehadiran (NIP, Nama, dll) tetap aman dan tidak terhapus.
+                supabase.table('absensi').update({'foto_bukti': ''}).neq('nip', '').execute()
+                st.success("Seluruh foto rekam wajah pada riwayat absensi berhasil dihapus!")
 
     with tab6:
         st.markdown("### ⚙️ Pengaturan Batas Waktu Absensi")
