@@ -813,118 +813,79 @@ elif st.session_state.role == "Superadmin":
         st.write("---")
         st.markdown("### 📋 Edit & Kelola Daftar Pegawai Aktif")
         
-        # --- PERUBAHAN: MENAMBAHKAN KOLOM PENCARIAN ---
+        # Filter Sekolah dan Pencarian NIP/Nama
         col_f1, col_f2 = st.columns(2)
-        
         with col_f1:
-            opsi_sekolah_filter = ["Semua Sekolah"]
-            if not st.session_state.schools.empty:
-                opsi_sekolah_filter += st.session_state.schools['school_name'].tolist()
-            sekolah_pilihan_peg = st.selectbox("🏢 Filter Sekolah:", opsi_sekolah_filter, key="filter_sekolah_pegawai")
-            
+            opsi_sekolah_edit = ["Semua Sekolah"] + st.session_state.schools['school_name'].tolist()
+            sekolah_pilihan_edit = st.selectbox("🏢 Filter Sekolah:", opsi_sekolah_edit, key="filter_sekolah_superadmin_edit")
         with col_f2:
-            search_query = st.text_input("🔍 Cari NIP atau Nama:", placeholder="Ketik NIP atau Nama...", key="search_pegawai")
+            search_query_edit = st.text_input("🔍 Cari NIP atau Nama:", placeholder="Ketik NIP atau Nama...", key="search_superadmin_edit")
         
-        df_peg_filtered = st.session_state.employees.copy()
-        
-        # 1. Terapkan filter sekolah
-        if sekolah_pilihan_peg != "Semua Sekolah":
-            df_peg_filtered = df_peg_filtered[df_peg_filtered['school_name'] == sekolah_pilihan_peg]
-            
-        # 2. Terapkan filter pencarian teks (NIP atau Nama)
-        if search_query:
-            mask_search = (
-                df_peg_filtered['nip'].astype(str).str.contains(search_query, case=False, na=False) | 
-                df_peg_filtered['name'].astype(str).str.contains(search_query, case=False, na=False)
-            )
-            df_peg_filtered = df_peg_filtered[mask_search]
-            
-        total_peg = len(df_peg_filtered)
-        
-        if total_peg == 0:
-            st.info("Tidak ada data pegawai yang ditemukan sesuai filter/pencarian Anda.")
+        # Tampilan default kosong jika kolom pencarian belum diisi
+        if not search_query_edit.strip():
+            st.info("💡 Silakan ketik NIP atau Nama pegawai pada kolom pencarian di atas untuk menampilkan data.")
         else:
-            items_per_page = 10
-            # ... (Lanjutkan dengan sisa kode pagination dan expander seperti sebelumnya)
-            total_pages = (total_peg // items_per_page) + (1 if total_peg % items_per_page > 0 else 0)
+            df_kandidat = st.session_state.employees.copy()
             
-            col_info, col_page = st.columns([1, 1])
-            with col_info:
-                st.caption(f"Menampilkan total **{total_peg}** pegawai.")
-            with col_page:
-                if total_pages > 1:
-                    page_peg = st.selectbox("📄 Halaman:", range(1, total_pages + 1), format_func=lambda x: f"Halaman {x} dari {total_pages}", key="page_pegawai")
-                else:
-                    page_peg = 1
+            # Filter berdasarkan sekolah
+            if sekolah_pilihan_edit != "Semua Sekolah":
+                df_kandidat = df_kandidat[df_kandidat['school_name'] == sekolah_pilihan_edit]
                 
-            start_idx = (page_peg - 1) * items_per_page
-            end_idx = start_idx + items_per_page
-            df_page_peg = df_peg_filtered.iloc[start_idx:end_idx]
+            # Filter pencarian spesifik (NIP / Nama)
+            mask_search = (
+                df_kandidat['nip'].astype(str).str.contains(search_query_edit, case=False, na=False) | 
+                df_kandidat['name'].astype(str).str.contains(search_query_edit, case=False, na=False)
+            )
+            df_kandidat = df_kandidat[mask_search]
             
-            for idx, emp in df_page_peg.iterrows():
-                nip_old = str(emp['nip'])
-                nama_old = emp['name']
-                sekolah_old = emp['school_name']
-                is_uploaded = str(emp.get('photo_uploaded', False)).lower() == 'true'
-                is_cadar_old = str(emp.get('is_cadar', False)).lower() == 'true'
+            total_pegawai = len(df_kandidat)
+            
+            if total_pegawai == 0:
+                st.info("Tidak ada pegawai yang cocok dengan pencarian Anda.")
+            else:
+                st.caption(f"Menampilkan total {total_pegawai} data pegawai.")
+                st.write("---")
                 
-                status_kunci = "🔒 Foto Terkunci" if is_uploaded else "🔓 Foto Belum Diunggah"
-                if is_cadar_old:
-                    status_kunci += " (🧕 Mode Cadar Aktif)"
-                
-                with st.expander(f"👤 {nama_old} — NIP: {nip_old} ({status_kunci})"):
-                    col_e1, col_e2 = st.columns(2)
-                    with col_e1:
-                        edit_nip = st.text_input("NIP Pegawai", value=nip_old, key=f"nip_edit_{nip_old}")
-                        edit_nama = st.text_input("Nama Pegawai", value=nama_old, key=f"nama_edit_{nip_old}")
-                        
-                        # Tambahan Toggle Mode Cadar di Superadmin
-                        edit_cadar = st.checkbox("🧕 Izinkan Mode Cadar (Bypass AI)", value=is_cadar_old, key=f"cadar_edit_{nip_old}")
-                        
-                    with col_e2:
-                        list_sch = st.session_state.schools['school_name'].tolist() if not st.session_state.schools.empty else [sekolah_old]
-                        default_sch_idx = list_sch.index(sekolah_old) if sekolah_old in list_sch else 0
-                        edit_sekolah = st.selectbox("Penempatan Sekolah", list_sch, index=default_sch_idx, key=f"sch_edit_{nip_old}")
-                        
-                        st.markdown("**Status Foto Verifikasi:**")
-                        if is_uploaded:
-                            st.warning("Foto acuan sudah diunggah oleh Admin.")
-                            if st.button("🔓 Buka Kunci Foto (Reset Foto)", key=f"unlock_foto_{nip_old}", use_container_width=True):
-                                supabase.table('pegawai').update({
-                                    'photo_uploaded': False,
-                                    'photo_base64': ''
-                                }).eq('nip', nip_old).execute()
+                # Menampilkan data pegawai hasil pencarian langsung tanpa pagination
+                for index, emp in df_kandidat.iterrows():
+                    nip = str(emp['nip'])
+                    nama = emp['name']
+                    sekolah_emp = emp['school_name']
+                    is_cadar = str(emp.get('is_cadar', 'False')).lower() == 'true'
+                    is_uploaded = str(emp.get('photo_uploaded', False)).lower() == 'true'
+                    
+                    status_foto = "🧕 Mode Cadar" if is_cadar else ("✅ Foto Ada" if is_uploaded else "📷 Foto Belum Diunggah")
+                    
+                    with st.expander(f"👤 {nama} — NIP: {nip} ({status_foto})"):
+                        with st.form(key=f"form_edit_{nip}"):
+                            new_name = st.text_input("Nama Pegawai:", value=nama)
+                            new_school = st.selectbox("Unit Kerja / Sekolah:", st.session_state.schools['school_name'].tolist(), index=st.session_state.schools['school_name'].tolist().index(sekolah_emp) if sekolah_emp in st.session_state.schools['school_name'].tolist() else 0)
+                            new_cadar = st.checkbox("Mode Cadar (Audit Manual)", value=is_cadar)
+                            
+                            col_btn1, col_btn2 = st.columns(2)
+                            with col_btn1:
+                                btn_update = st.form_submit_button("💾 Simpan Perubahan", type="primary", use_container_width=True)
+                            with col_btn2:
+                                btn_delete = st.form_submit_button("🗑️ Hapus Pegawai", use_container_width=True)
                                 
+                            if btn_update:
+                                supabase.table('pegawai').update({
+                                    'name': new_name,
+                                    'school_name': new_school,
+                                    'is_cadar': new_cadar
+                                }).eq('nip', nip).execute()
+                                
+                                st.success(f"Data pegawai {nama} berhasil diperbarui!")
                                 st.session_state.employees = get_data_pegawai()
-                                st.success(f"✅ Kunci foto pegawai {nama_old} berhasil dibuka!")
                                 time.sleep(1)
                                 st.rerun()
-                        else:
-                            st.info("Belum ada foto acuan (Siap diunggah oleh Admin).")
-                            
-                    col_btn1, col_btn2 = st.columns(2)
-                    with col_btn1:
-                        if st.button("💾 Simpan Perubahan Data", key=f"save_peg_{nip_old}", type="primary", use_container_width=True):
-                            supabase.table('pegawai').update({
-                                'nip': str(edit_nip),
-                                'name': edit_nama,
-                                'school_name': edit_sekolah,
-                                'is_cadar': edit_cadar
-                            }).eq('nip', nip_old).execute()
-                            
-                            st.session_state.employees = get_data_pegawai()
-                            st.success(f"✅ Data {edit_nama} berhasil diperbarui!")
-                            time.sleep(1)
-                            st.rerun()
-                            
-                    with col_btn2:
-                        if st.button("🗑️ Hapus Pegawai", key=f"del_peg_{nip_old}", use_container_width=True):
-                            supabase.table('pegawai').delete().eq('nip', nip_old).execute()
-                            st.session_state.employees = get_data_pegawai()
-                            st.success(f"🗑️ Pegawai {nama_old} berhasil dihapus!")
-                            time.sleep(1)
-                            st.rerun()
-
+                                
+                            if btn_delete:
+                                supabase.table('pegawai').delete().eq('nip', nip).execute()
+                                st.success(f"Pegawai {nama} berhasil dihapus!")
+                                st.session_state.employees = get_data_pegawai()
+                                time.sleep(1)
+                                st.rerun()
     with tab3:
         st.markdown("### 🔑 Kelola Akun Admin")
         
