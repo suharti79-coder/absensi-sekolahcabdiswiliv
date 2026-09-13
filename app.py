@@ -477,9 +477,6 @@ if st.session_state.role == "Pegawai":
 # ==========================================
 # HAK AKSES 2: ADMIN
 # ==========================================
-# ==========================================
-# HAK AKSES 2: ADMIN
-# ==========================================
 elif st.session_state.role == "Admin":
     col_judul, col_tombol = st.columns([3, 1])
     with col_judul:
@@ -495,7 +492,7 @@ elif st.session_state.role == "Admin":
     else:
         st.markdown("### 📸 1. Kelola Foto Acuan Pegawai")
         
-        # Penambahan Kolom Pencarian NIP/Nama untuk Admin
+        # Filter Sekolah dan Pencarian NIP/Nama
         col_f1, col_f2 = st.columns(2)
         with col_f1:
             opsi_sekolah_foto = ["Semua Sekolah"] + st.session_state.schools['school_name'].tolist()
@@ -503,83 +500,71 @@ elif st.session_state.role == "Admin":
         with col_f2:
             search_query_foto = st.text_input("🔍 Cari NIP atau Nama:", placeholder="Ketik NIP atau Nama spesifik...", key="search_admin_foto")
         
-        df_kandidat = st.session_state.employees.copy()
-        
-        # Filter berdasarkan sekolah
-        if sekolah_pilihan_foto != "Semua Sekolah":
-            df_kandidat = df_kandidat[df_kandidat['school_name'] == sekolah_pilihan_foto]
+        # Tampilan default kosong jika kolom pencarian belum diisi
+        if not search_query_foto.strip():
+            st.info("💡 Silakan ketik NIP atau Nama pegawai pada kolom pencarian di atas untuk menampilkan data.")
+        else:
+            df_kandidat = st.session_state.employees.copy()
             
-        # Filter pencarian spesifik (NIP / Nama)
-        if search_query_foto:
+            # Filter berdasarkan sekolah
+            if sekolah_pilihan_foto != "Semua Sekolah":
+                df_kandidat = df_kandidat[df_kandidat['school_name'] == sekolah_pilihan_foto]
+                
+            # Filter pencarian spesifik (NIP / Nama)
             mask_search = (
                 df_kandidat['nip'].astype(str).str.contains(search_query_foto, case=False, na=False) | 
                 df_kandidat['name'].astype(str).str.contains(search_query_foto, case=False, na=False)
             )
             df_kandidat = df_kandidat[mask_search]
             
-        total_pegawai = len(df_kandidat)
-        
-        if total_pegawai == 0:
-            st.info("Tidak ada pegawai yang cocok dengan pencarian Anda di sekolah ini.")
-        else:
-            items_per_page = 10
-            total_pages = (total_pegawai // items_per_page) + (1 if total_pegawai % items_per_page > 0 else 0)
+            total_pegawai = len(df_kandidat)
             
-            col_info, col_page = st.columns([1, 1])
-            with col_info:
-                st.caption(f"Menampilkan {total_pegawai} data pegawai.")
+            if total_pegawai == 0:
+                st.info("Tidak ada pegawai yang cocok dengan pencarian Anda.")
+            else:
+                st.caption(f"Menampilkan {total_pegawai} data pegawai yang cocok.")
+                st.write("---")
                 
-            with col_page:
-                if total_pages > 1:
-                    page = st.selectbox("📄 Pilih Halaman:", range(1, total_pages + 1), format_func=lambda x: f"Halaman {x} dari {total_pages}")
-                else:
-                    page = 1
+                # Menampilkan data pegawai hasil pencarian tanpa pagination
+                for index, emp in df_kandidat.iterrows():
+                    nip = str(emp['nip'])
+                    nama = emp['name']
+                    sekolah_emp = emp['school_name']
+                    is_cadar = str(emp.get('is_cadar', 'False')).lower() == 'true'
                     
-            start_idx = (page - 1) * items_per_page
-            end_idx = start_idx + items_per_page
-            df_page = df_kandidat.iloc[start_idx:end_idx]
-            
-            st.write("---")
-            
-            for index, emp in df_page.iterrows():
-                nip = str(emp['nip'])
-                nama = emp['name']
-                sekolah_emp = emp['school_name']
-                is_cadar = str(emp.get('is_cadar', 'False')).lower() == 'true'
-                
-                is_uploaded = str(emp.get('photo_uploaded', False)).lower() == 'true'
-                status_simbol = "🧕" if is_cadar else ("🟢" if is_uploaded else "🔴")
-                status_teks = "Mode Cadar (Audit)" if is_cadar else ""
-                
-                with st.expander(f"{status_simbol} {nama} — NIP: {nip} {status_teks}"):
-                    col_kiri, col_kanan = st.columns([1, 2])
+                    is_uploaded = str(emp.get('photo_uploaded', False)).lower() == 'true'
+                    status_simbol = "🧕" if is_cadar else ("🟢" if is_uploaded else "🔴")
+                    status_teks = "Mode Cadar (Audit)" if is_cadar else ""
                     
-                    with col_kiri:
-                        if is_uploaded and pd.notna(emp.get('photo_base64')) and emp['photo_base64'] != '':
-                            st.image(emp['photo_base64'], caption="Foto Saat Ini", use_container_width=True)
-                        else:
-                            st.info("📷 Belum ada foto")
-                            
-                    with col_kanan:
-                        st.markdown(f"**Unit Kerja:** {sekolah_emp}")
-                        if is_uploaded:
-                            st.warning("⚠️ Mengunggah foto baru akan menimpa foto lama.")
+                    with st.expander(f"{status_simbol} {nama} — NIP: {nip} {status_teks}"):
+                        col_kiri, col_kanan = st.columns([1, 2])
                         
-                        foto = st.file_uploader("Pilih Pas Foto Baru", type=['jpg', 'jpeg', 'png'], key=f"foto_{nip}")
-                        
-                        if foto and st.button("💾 Simpan & Update Foto", type="primary", key=f"btn_{nip}", use_container_width=True):
-                            base64_str = base64.b64encode(foto.getvalue()).decode('utf-8')
-                            full_base64 = f"data:image/jpeg;base64,{base64_str}"
+                        with col_kiri:
+                            if is_uploaded and pd.notna(emp.get('photo_base64')) and emp['photo_base64'] != '':
+                                st.image(emp['photo_base64'], caption="Foto Saat Ini", use_container_width=True)
+                            else:
+                                st.info("📷 Belum ada foto")
+                                
+                        with col_kanan:
+                            st.markdown(f"**Unit Kerja:** {sekolah_emp}")
+                            if is_uploaded:
+                                st.warning("⚠️ Mengunggah foto baru akan menimpa foto lama.")
                             
-                            supabase.table('pegawai').update({
-                                'photo_uploaded': True,
-                                'photo_base64': full_base64
-                            }).eq('nip', nip).execute()
+                            foto = st.file_uploader("Pilih Pas Foto Baru", type=['jpg', 'jpeg', 'png'], key=f"foto_{nip}")
                             
-                            st.success("✅ Foto berhasil diperbarui!")
-                            st.session_state.employees = get_data_pegawai()
-                            time.sleep(1)
-                            st.rerun()
+                            if foto and st.button("💾 Simpan & Update Foto", type="primary", key=f"btn_{nip}", use_container_width=True):
+                                base64_str = base64.b64encode(foto.getvalue()).decode('utf-8')
+                                full_base64 = f"data:image/jpeg;base64,{base64_str}"
+                                
+                                supabase.table('pegawai').update({
+                                    'photo_uploaded': True,
+                                    'photo_base64': full_base64
+                                }).eq('nip', nip).execute()
+                                
+                                st.success("✅ Foto berhasil diperbarui!")
+                                st.session_state.employees = get_data_pegawai()
+                                time.sleep(1)
+                                st.rerun()
 
     st.markdown("### 2. Laporan & Rekap Absensi")
     
