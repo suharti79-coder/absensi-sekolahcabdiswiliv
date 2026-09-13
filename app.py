@@ -477,6 +477,9 @@ if st.session_state.role == "Pegawai":
 # ==========================================
 # HAK AKSES 2: ADMIN
 # ==========================================
+# ==========================================
+# HAK AKSES 2: ADMIN
+# ==========================================
 elif st.session_state.role == "Admin":
     col_judul, col_tombol = st.columns([3, 1])
     with col_judul:
@@ -492,24 +495,39 @@ elif st.session_state.role == "Admin":
     else:
         st.markdown("### 📸 1. Kelola Foto Acuan Pegawai")
         
-        opsi_sekolah_foto = ["Semua Sekolah"] + st.session_state.schools['school_name'].tolist()
-        sekolah_pilihan_foto = st.selectbox("🏢 Filter Sekolah:", opsi_sekolah_foto, key="filter_sekolah_foto")
+        # Penambahan Kolom Pencarian NIP/Nama untuk Admin
+        col_f1, col_f2 = st.columns(2)
+        with col_f1:
+            opsi_sekolah_foto = ["Semua Sekolah"] + st.session_state.schools['school_name'].tolist()
+            sekolah_pilihan_foto = st.selectbox("🏢 Filter Sekolah:", opsi_sekolah_foto, key="filter_sekolah_foto")
+        with col_f2:
+            search_query_foto = st.text_input("🔍 Cari NIP atau Nama:", placeholder="Ketik NIP atau Nama spesifik...", key="search_admin_foto")
         
         df_kandidat = st.session_state.employees.copy()
+        
+        # Filter berdasarkan sekolah
         if sekolah_pilihan_foto != "Semua Sekolah":
             df_kandidat = df_kandidat[df_kandidat['school_name'] == sekolah_pilihan_foto]
+            
+        # Filter pencarian spesifik (NIP / Nama)
+        if search_query_foto:
+            mask_search = (
+                df_kandidat['nip'].astype(str).str.contains(search_query_foto, case=False, na=False) | 
+                df_kandidat['name'].astype(str).str.contains(search_query_foto, case=False, na=False)
+            )
+            df_kandidat = df_kandidat[mask_search]
             
         total_pegawai = len(df_kandidat)
         
         if total_pegawai == 0:
-            st.info("Tidak ada pegawai di sekolah ini.")
+            st.info("Tidak ada pegawai yang cocok dengan pencarian Anda di sekolah ini.")
         else:
             items_per_page = 10
             total_pages = (total_pegawai // items_per_page) + (1 if total_pegawai % items_per_page > 0 else 0)
             
             col_info, col_page = st.columns([1, 1])
             with col_info:
-                st.caption(f"Menampilkan total {total_pegawai} pegawai.")
+                st.caption(f"Menampilkan {total_pegawai} data pegawai.")
                 
             with col_page:
                 if total_pages > 1:
