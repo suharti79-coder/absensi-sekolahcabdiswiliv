@@ -1092,13 +1092,16 @@ elif st.session_state.role == "Superadmin":
             new_batas_masuk = st.time_input("Batas Waktu Absen Masuk (Di atas jam ini = Terlambat)", waktu_masuk_obj)
             new_batas_pulang = st.time_input("Batas Waktu Absen Pulang (Di bawah jam ini = Pulang Awal)", waktu_pulang_obj)
             
-            if st.form_submit_button("Simpan Pengaturan Waktu"):
-                updated_settings = {
-                    'batas_masuk': new_batas_masuk.strftime('%H:%M'),
-                    'batas_pulang': new_batas_pulang.strftime('%H:%M')
-                }
-                supabase.table('pengaturan').delete().neq('batas_masuk', '').execute()
-                supabase.table('pengaturan').insert(updated_settings).execute()
+            if st.form_submit_button("Simpan Pengaturan Waktu", type="primary"):
+                batas_masuk_format = new_batas_masuk.strftime('%H:%M')
+                batas_pulang_format = new_batas_pulang.strftime('%H:%M')
+                
+                supabase.table('pengaturan').update({
+                    'batas_masuk': batas_masuk_format,
+                    'batas_pulang': batas_pulang_format
+                }).neq('batas_masuk', '').execute()
+                
                 st.session_state.settings = get_data_pengaturan()
-                st.success("✅ Pengaturan jam kerja berhasil diperbarui di database!")
+                st.success("✅ Pengaturan waktu berhasil disimpan dan akan berlaku untuk seluruh sekolah.")
+                time.sleep(1)
                 st.rerun()
