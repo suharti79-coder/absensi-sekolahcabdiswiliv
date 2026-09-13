@@ -8,6 +8,4 @@ python-dotenv
 pandas
 numpy
 opencv-python-headless
-opencv-python-headless
-numpy
 openpyxl
