@@ -9,4 +9,4 @@ pandas
 numpy
 opencv-python-headless
 openpyxl
-openpyxl==3.1.2
+openpyxl>=3.1.5
