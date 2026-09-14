@@ -43,6 +43,14 @@ def upload_ke_supabase(file_bytes, file_path, content_type):
         st.error(f"Gagal upload ke server Storage: {e}")
         return None
 
+# --- POPUP WARNING INTERAKTIF UNTUK ERROR CSV ---
+@st.dialog("Peringatan File CSV ⚠️")
+def tampilkan_peringatan_csv():
+    st.write("Gagal memproses file: Terdapat **sel atau baris kosong** di dalam file CSV Anda.")
+    st.write("Pastikan semua data terisi penuh dan hapus baris kosong di bagian paling bawah tabel, lalu coba upload ulang.")
+    if st.button("Oke, Saya Mengerti", key="btn_close_dialog_csv", use_container_width=True):
+        st.rerun()
+
 # --- 1.5. FUNGSI KRIPTOGRAFI KEAMANAN COOKIE (HMAC) ---
 SECRET_KEY = os.environ.get("COOKIE_SECRET") or st.secrets.get("COOKIE_SECRET", "kunci_rahasia_absensi_sekolah_cabdis_wil_iv_987654321")
 
@@ -796,7 +804,15 @@ elif st.session_state.role == "Superadmin":
             if st.button("Proses Upload", key="btn_proses_csv"):
                 try:
                     df_upload = pd.read_csv(file_upload)
-                    if all(col in df_upload.columns for col in ['nip', 'name', 'school_name']):
+                    
+                    # Hapus baris yang sepenuhnya kosong jika ada
+                    df_upload = df_upload.dropna(how='all')
+
+                    # Cek jika terdapat sel kosong (NaN) yang menyebabkan error JSON float
+                    if df_upload[['nip', 'name', 'school_name']].isnull().values.any():
+                        tampilkan_peringatan_csv()
+                    elif all(col in df_upload.columns for col in ['nip', 'name', 'school_name']):
+                        df_upload = df_upload.fillna("")
                         df_upload['photo_uploaded'] = False
                         df_upload['photo_base64'] = ''
                         df_upload['is_cadar'] = False
@@ -810,7 +826,10 @@ elif st.session_state.role == "Superadmin":
                     else:
                         st.error("Format kolom salah! Pastikan file memiliki kolom: nip, name, school_name.")
                 except Exception as e:
-                    st.error(f"Gagal membaca file: {e}")
+                    if "Out of range float values are not JSON compliant" in str(e):
+                        tampilkan_peringatan_csv()
+                    else:
+                        st.error(f"Gagal membaca file: {e}")
 
         st.write("---")
         st.markdown("### 📋 Edit & Kelola Daftar Pegawai Aktif")
