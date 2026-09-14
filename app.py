@@ -27,18 +27,16 @@ except Exception as e:
     st.error(f"Gagal terhubung ke Supabase: {e}")
     st.stop()
 
-# --- TAMBAHAN: FUNGSI UPLOAD KE SUPABASE STORAGE ---
+# --- FUNGSI UPLOAD KE SUPABASE STORAGE ---
 def upload_ke_supabase(file_bytes, file_path, content_type):
     """Fungsi untuk mengupload file ke bucket 'absensi-files' dan mengembalikan URL publiknya"""
     bucket_name = "absensi-files"
     try:
-        # Upload file ke Supabase Storage
         supabase.storage.from_(bucket_name).upload(
             path=file_path,
             file=file_bytes,
             file_options={"content-type": content_type, "upsert": "true"}
         )
-        # Ambil URL Publik
         public_url = supabase.storage.from_(bucket_name).get_public_url(file_path)
         return public_url
     except Exception as e:
@@ -182,8 +180,8 @@ if 'admin_sekolah' not in st.session_state:
 if 'logout_triggered' not in st.session_state:
     st.session_state.logout_triggered = False
 
-raw_token = cookie_manager.get(cookie="auth_token")
-saved_admin_school = cookie_manager.get(cookie="admin_sekolah")
+raw_token = cookie_manager.get(cookie="auth_token", key="get_raw_token_auth_main")
+saved_admin_school = cookie_manager.get(cookie="admin_sekolah", key="get_admin_school_main")
 if saved_admin_school:
     st.session_state.admin_sekolah = saved_admin_school
 
@@ -200,8 +198,8 @@ else:
     elif raw_token and not valid_role:
         st.session_state.role = None
         try:
-            cookie_manager.delete("auth_token", key="force_del_auth")
-            cookie_manager.delete("admin_sekolah", key="force_del_admin_sch")
+            cookie_manager.delete("auth_token", key="del_auth_invalid_role")
+            cookie_manager.delete("admin_sekolah", key="del_sch_invalid_role")
         except KeyError:
             pass
 
@@ -210,9 +208,9 @@ def logout():
     st.session_state.admin_sekolah = "Semua Sekolah"
     st.session_state.logout_triggered = True  
     try:
-        cookie_manager.delete("auth_token", key="delete_auth_token")
-        cookie_manager.delete("role", key="delete_role") 
-        cookie_manager.delete("admin_sekolah", key="delete_admin_sekolah") 
+        cookie_manager.delete("auth_token", key="delete_auth_token_btn")
+        cookie_manager.delete("role", key="delete_role_btn") 
+        cookie_manager.delete("admin_sekolah", key="delete_admin_sekolah_btn") 
     except KeyError:
         pass
 
@@ -223,9 +221,9 @@ if st.session_state.role is None:
     st.title("📍 Portal Presensi Sekolah CABDIS WIL IV")
     st.info("Selamat datang! Untuk merekam kehadiran Anda, silakan klik tombol di bawah ini.")
 
-    if st.button("📸 Mulai Presensi Wajah & GPS", type="primary", width="stretch"):
+    if st.button("📸 Mulai Presensi Wajah & GPS", type="primary", width="stretch", key="btn_login_pegawai_main"):
         st.session_state.role = "Pegawai"
-        cookie_manager.set("auth_token", generate_signed_token("Pegawai"))
+        cookie_manager.set("auth_token", generate_signed_token("Pegawai"), key="set_token_login_pegawai")
         time.sleep(0.5)
         st.rerun()
 
@@ -246,13 +244,13 @@ if st.session_state.role is None:
                     match = df_adm[(df_adm['username'] == input_user_admin) & (df_adm['password'] == pwd)]
                     if not match.empty:
                         is_valid = True
-                        assigned_school = match.iloc[0]['sekolah'] # Ambil unit kerja dari database
+                        assigned_school = match.iloc[0]['sekolah']
                         
                 if is_valid: 
                     st.session_state.role = "Admin"
                     st.session_state.admin_sekolah = assigned_school
-                    cookie_manager.set("auth_token", generate_signed_token("Admin"))
-                    cookie_manager.set("admin_sekolah", assigned_school)
+                    cookie_manager.set("auth_token", generate_signed_token("Admin"), key="set_token_login_admin")
+                    cookie_manager.set("admin_sekolah", assigned_school, key="set_sch_login_admin")
                     time.sleep(0.5)
                     st.rerun()
                 else: 
@@ -265,7 +263,7 @@ if st.session_state.role is None:
                 superadmin_password = os.environ.get("SUPERADMIN_PASSWORD") or st.secrets.get("SUPERADMIN_PASSWORD", "superadmin123")
                 if pwd_super == superadmin_password:
                     st.session_state.role = "Superadmin"
-                    cookie_manager.set("auth_token", generate_signed_token("Superadmin"))
+                    cookie_manager.set("auth_token", generate_signed_token("Superadmin"), key="set_token_login_super")
                     time.sleep(0.5)
                     st.rerun()
                 else: 
@@ -279,7 +277,7 @@ st.sidebar.title("Informasi Akun")
 st.sidebar.success(f"Akses: **{st.session_state.role}**")
 if st.session_state.role == "Admin":
     st.sidebar.caption(f"Unit Kerja: {st.session_state.admin_sekolah}")
-st.sidebar.button("🚪 Keluar (Logout)", on_click=logout, key="btn_logout_utama")
+st.sidebar.button("🚪 Keluar (Logout)", on_click=logout, key="btn_logout_sidebar")
 st.sidebar.write("---")
 
 waktu_sekarang = datetime.datetime.now(pytz.timezone('Asia/Makassar'))
@@ -292,11 +290,11 @@ st.sidebar.write("---")
 # HAK AKSES 1: PEGAWAI
 # ==========================================
 if st.session_state.role == "Pegawai":
-    st.button("⬅️ Kembali ke Halaman Awal", on_click=logout)
+    st.button("⬅️ Kembali ke Halaman Awal", on_click=logout, key="btn_back_pegawai")
     st.title("📍 Presensi GPS & Wajah")
     
     st.session_state.schools = get_data_sekolah()
-    nip_input = st.text_input("SILAHKAN KETIK NIP:", placeholder="Contoh: 198001012005011001")
+    nip_input = st.text_input("SILAHKAN KETIK NIP:", placeholder="Contoh: 198001012005011001", key="nip_input_pegawai")
     
     if nip_input.strip():
         try:
@@ -338,7 +336,7 @@ if st.session_state.role == "Pegawai":
                     if not is_cadar and not (is_uploaded and pd.notna(emp_data.get('photo_base64'))):
                         st.warning("⚠️ Admin belum mengunggah foto acuan wajah Anda. Harap hubungi Admin.")
                     else:
-                        img_camera = st.camera_input("Ambil Foto di Lokasi Sekolah")
+                        img_camera = st.camera_input("Ambil Foto di Lokasi Sekolah", key="cam_pegawai_input")
                         
                         if img_camera:
                             bytes_data = img_camera.getvalue()
@@ -418,9 +416,9 @@ if st.session_state.role == "Pegawai":
 
                             col_masuk, col_pulang = st.columns(2)
                             with col_masuk:
-                                btn_masuk = st.button("📥 MASUK", type="primary", width="stretch")
+                                btn_masuk = st.button("📥 MASUK", type="primary", width="stretch", key="btn_absen_masuk")
                             with col_pulang:
-                                btn_pulang = st.button("📤 PULANG", width="stretch")
+                                btn_pulang = st.button("📤 PULANG", width="stretch", key="btn_absen_pulang")
                                 
                             if btn_masuk or btn_pulang:
                                 now = datetime.datetime.now(pytz.timezone('Asia/Makassar'))
@@ -486,7 +484,7 @@ elif st.session_state.role == "Admin":
     with col_judul:
         st.title("🔐 Dashboard Admin")
     with col_tombol:
-        st.button("🚪 Logout", on_click=logout, width="stretch")
+        st.button("🚪 Logout", on_click=logout, width="stretch", key="btn_logout_top_admin")
     
     st.session_state.employees = get_data_pegawai()
     st.session_state.schools = get_data_sekolah()
@@ -501,10 +499,10 @@ elif st.session_state.role == "Admin":
         with col_f1:
             if admin_akses == "Semua Sekolah":
                 opsi_sekolah_foto = ["Semua Sekolah"] + st.session_state.schools['school_name'].tolist()
-                sekolah_pilihan_foto = st.selectbox("🏢 Filter Sekolah:", opsi_sekolah_foto, key="filter_sekolah_foto")
+                sekolah_pilihan_foto = st.selectbox("🏢 Filter Sekolah:", opsi_sekolah_foto, key="filter_sekolah_foto_all")
             else:
                 st.info(f"Akses Unit Kerja: {admin_akses}")
-                sekolah_pilihan_foto = st.selectbox("🏢 Filter Sekolah:", [admin_akses], disabled=True, key="filter_sekolah_foto")
+                sekolah_pilihan_foto = st.selectbox("🏢 Filter Sekolah:", [admin_akses], disabled=True, key="filter_sekolah_foto_locked")
                 
         with col_f2:
             search_query_foto = st.text_input("🔍 Cari NIP atau Nama:", placeholder="Ketik NIP atau Nama spesifik...", key="search_admin_foto")
@@ -554,9 +552,9 @@ elif st.session_state.role == "Admin":
                                 st.success("✅ Foto telah diunggah dan tersimpan.")
                                 st.error("🔒 Akses ubah foto dikunci. Hubungi Superadmin untuk mereset foto.")
                             else:
-                                foto = st.file_uploader("Pilih Pas Foto Baru", type=['jpg', 'jpeg', 'png'], key=f"foto_{nip}")
+                                foto = st.file_uploader("Pilih Pas Foto Baru", type=['jpg', 'jpeg', 'png'], key=f"foto_up_{nip}")
                                 
-                                if foto and st.button("💾 Simpan & Update Foto", type="primary", key=f"btn_{nip}", use_container_width=True):
+                                if foto and st.button("💾 Simpan & Update Foto", type="primary", key=f"btn_save_foto_{nip}", use_container_width=True):
                                     file_bytes = foto.getvalue()
                                     path_simpan = f"foto_acuan/{nip}.jpg"
                                     url_foto = upload_ke_supabase(file_bytes, path_simpan, foto.type)
@@ -576,13 +574,13 @@ elif st.session_state.role == "Admin":
     
     col_tgl, col_sch = st.columns(2)
     with col_tgl:
-        tgl_pilihan = st.date_input("Pilih Tanggal Rekap:", datetime.datetime.now(pytz.timezone('Asia/Makassar')).date())
+        tgl_pilihan = st.date_input("Pilih Tanggal Rekap:", datetime.datetime.now(pytz.timezone('Asia/Makassar')).date(), key="tgl_rekap_admin_input")
     with col_sch:
         if admin_akses == "Semua Sekolah":
             opsi_sekolah = ["Semua Sekolah"] + st.session_state.schools['school_name'].tolist()
-            sekolah_pilihan = st.selectbox("Filter Sekolah:", opsi_sekolah, key="filter_sekolah_rekap")
+            sekolah_pilihan = st.selectbox("Filter Sekolah:", opsi_sekolah, key="filter_sekolah_rekap_all")
         else:
-            sekolah_pilihan = st.selectbox("Filter Sekolah:", [admin_akses], disabled=True, key="filter_sekolah_rekap")
+            sekolah_pilihan = st.selectbox("Filter Sekolah:", [admin_akses], disabled=True, key="filter_sekolah_rekap_locked")
     
     df_emp = st.session_state.employees.copy()
     if sekolah_pilihan != "Semua Sekolah":
@@ -683,7 +681,8 @@ elif st.session_state.role == "Admin":
             label="📥 Download Rekap Absensi (Excel)",
             data=buffer.getvalue(),
             file_name=f"Rekap_Absensi_{sekolah_pilihan.replace(' ', '_')}_{tgl_str}.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            key="dl_rekap_admin_excel"
         )
 
 # ==========================================
@@ -694,7 +693,7 @@ elif st.session_state.role == "Superadmin":
     with col_judul:
         st.title("🛠️ Dashboard Superadmin")
     with col_tombol:
-        st.button("🚪 Logout", on_click=logout, width="stretch")
+        st.button("🚪 Logout", on_click=logout, width="stretch", key="btn_logout_top_super")
     
     st.session_state.schools = get_data_sekolah()
     st.session_state.employees = get_data_pegawai()
@@ -713,15 +712,15 @@ elif st.session_state.role == "Superadmin":
         st.markdown("### Tambah Titik Sekolah Baru")
         st.info("Buka Google Maps, klik kanan pada lokasi sekolah, salin angka koordinatnya.")
         with st.form("form_sekolah"):
-            new_sch_name = st.text_input("Nama Sekolah / Area Lokasi")
+            new_sch_name = st.text_input("Nama Sekolah / Area Lokasi", key="inp_new_sch_name")
             col_lat, col_lng = st.columns(2)
             with col_lat:
-                new_lat = st.number_input("Latitude (Cth: -5.147665)", format="%.6f")
+                new_lat = st.number_input("Latitude (Cth: -5.147665)", format="%.6f", key="inp_new_lat")
             with col_lng:
-                new_lng = st.number_input("Longitude (Cth: 119.432731)", format="%.6f")
-            new_rad = st.number_input("Radius Akses (Meter)", min_value=10, value=100)
+                new_lng = st.number_input("Longitude (Cth: 119.432731)", format="%.6f", key="inp_new_lng")
+            new_rad = st.number_input("Radius Akses (Meter)", min_value=10, value=100, key="inp_new_rad")
             
-            if st.form_submit_button("Simpan Sekolah Baru"):
+            if st.form_submit_button("Simpan Sekolah Baru", key="btn_sub_sekolah"):
                 if new_sch_name:
                     data_sekolah_baru = {
                         'school_name': new_sch_name, 
@@ -747,7 +746,7 @@ elif st.session_state.role == "Superadmin":
             key="school_editor"
         )
         
-        if st.button("💾 Simpan Perubahan Tabel", type="primary"):
+        if st.button("💾 Simpan Perubahan Tabel", type="primary", key="btn_save_school_table"):
             supabase.table('sekolah').delete().neq('school_name', '').execute()
             records = edited_schools.to_dict(orient='records')
             if records:
@@ -759,12 +758,12 @@ elif st.session_state.role == "Superadmin":
     with tab2:
         st.markdown("### 1. Tambah Pegawai (Manual)")
         with st.form("form_tambah_pegawai"):
-            new_nip = st.text_input("NIP")
-            new_name = st.text_input("Nama Lengkap")
+            new_nip = st.text_input("NIP", key="inp_new_nip")
+            new_name = st.text_input("Nama Lengkap", key="inp_new_name")
             opsi_sekolah_input = st.session_state.schools['school_name'].tolist() if not st.session_state.schools.empty else []
-            new_school = st.selectbox("Penempatan Sekolah", opsi_sekolah_input)
+            new_school = st.selectbox("Penempatan Sekolah", opsi_sekolah_input, key="sel_new_school")
             
-            if st.form_submit_button("Tambahkan Manual"):
+            if st.form_submit_button("Tambahkan Manual", key="btn_sub_pegawai"):
                 if new_nip and new_name:
                     data_pegawai_baru = {
                         'nip': str(new_nip),
@@ -790,11 +789,11 @@ elif st.session_state.role == "Superadmin":
             'school_name': ['Sekolah Default', 'Sekolah Default']
         })
         csv_template = template_df.to_csv(index=False).encode('utf-8')
-        st.download_button("📥 1. Download Template CSV", data=csv_template, file_name="Template_Data_Pegawai.csv", mime="text/csv")
+        st.download_button("📥 1. Download Template CSV", data=csv_template, file_name="Template_Data_Pegawai.csv", mime="text/csv", key="dl_csv_template")
         
-        file_upload = st.file_uploader("2. Upload File Template yang sudah diisi", type=['csv'])
+        file_upload = st.file_uploader("2. Upload File Template yang sudah diisi", type=['csv'], key="uploader_csv_pegawai")
         if file_upload is not None:
-            if st.button("Proses Upload"):
+            if st.button("Proses Upload", key="btn_proses_csv"):
                 try:
                     df_upload = pd.read_csv(file_upload)
                     if all(col in df_upload.columns for col in ['nip', 'name', 'school_name']):
@@ -852,18 +851,18 @@ elif st.session_state.role == "Superadmin":
                     status_foto = "🧕 Mode Cadar" if is_cadar else ("✅ Foto Ada" if is_uploaded else "📷 Foto Belum Diunggah")
                     
                     with st.expander(f"👤 {nama} — NIP: {nip} ({status_foto})"):
-                        with st.form(key=f"form_edit_{nip}"):
-                            new_name = st.text_input("Nama Pegawai:", value=nama)
-                            new_school = st.selectbox("Unit Kerja / Sekolah:", st.session_state.schools['school_name'].tolist(), index=st.session_state.schools['school_name'].tolist().index(sekolah_emp) if sekolah_emp in st.session_state.schools['school_name'].tolist() else 0)
-                            new_cadar = st.checkbox("Mode Cadar (Audit Manual)", value=is_cadar)
+                        with st.form(key=f"form_edit_peg_{nip}"):
+                            new_name = st.text_input("Nama Pegawai:", value=nama, key=f"inp_name_{nip}")
+                            new_school = st.selectbox("Unit Kerja / Sekolah:", st.session_state.schools['school_name'].tolist(), index=st.session_state.schools['school_name'].tolist().index(sekolah_emp) if sekolah_emp in st.session_state.schools['school_name'].tolist() else 0, key=f"inp_sch_{nip}")
+                            new_cadar = st.checkbox("Mode Cadar (Audit Manual)", value=is_cadar, key=f"inp_cadar_{nip}")
                             
                             col_btn1, col_btn2, col_btn3 = st.columns(3)
                             with col_btn1:
-                                btn_update = st.form_submit_button("💾 Simpan", type="primary", use_container_width=True)
+                                btn_update = st.form_submit_button("💾 Simpan", type="primary", use_container_width=True, key=f"btn_upd_{nip}")
                             with col_btn2:
-                                btn_unlock = st.form_submit_button("🔓 Buka Kunci Foto", use_container_width=True)
+                                btn_unlock = st.form_submit_button("🔓 Buka Kunci Foto", use_container_width=True, key=f"btn_unl_{nip}")
                             with col_btn3:
-                                btn_delete = st.form_submit_button("🗑️ Hapus", use_container_width=True)
+                                btn_delete = st.form_submit_button("🗑️ Hapus", use_container_width=True, key=f"btn_del_{nip}")
                                 
                             if btn_update:
                                 supabase.table('pegawai').update({
@@ -897,15 +896,15 @@ elif st.session_state.role == "Superadmin":
         st.markdown("### 🔑 Kelola Akun Admin")
         with st.form("form_tambah_admin"):
             st.markdown("##### ➕ Tambah Akun Admin Baru")
-            new_admin_user = st.text_input("Username Admin")
-            new_admin_pass = st.text_input("Password Admin", type="password")
+            new_admin_user = st.text_input("Username Admin", key="inp_new_adm_user")
+            new_admin_pass = st.text_input("Password Admin", type="password", key="inp_new_adm_pass")
             
             opsi_sekolah_admin = ["Semua Sekolah"]
             if not st.session_state.schools.empty:
                 opsi_sekolah_admin += st.session_state.schools['school_name'].tolist()
-            new_admin_school = st.selectbox("Akses Sekolah / Unit Kerja", opsi_sekolah_admin)
+            new_admin_school = st.selectbox("Akses Sekolah / Unit Kerja", opsi_sekolah_admin, key="sel_new_adm_sch")
             
-            if st.form_submit_button("➕ Simpan Akun Admin Baru", type="primary"):
+            if st.form_submit_button("➕ Simpan Akun Admin Baru", type="primary", key="btn_sub_admin"):
                 if new_admin_user and new_admin_pass:
                     data_admin_baru = {
                         'username': new_admin_user,
@@ -935,11 +934,11 @@ elif st.session_state.role == "Superadmin":
                 with st.expander(f"👤 {username} — Unit Kerja: {sekolah}"):
                     col_e1, col_e2 = st.columns(2)
                     with col_e1:
-                        edit_user = st.text_input("Username", value=str(username), key=f"usr_{idx}")
-                        edit_pass = st.text_input("Password Baru", value=str(row.get('password', '')), type="password", key=f"pwd_{idx}")
+                        edit_user = st.text_input("Username", value=str(username), key=f"edit_usr_adm_{idx}")
+                        edit_pass = st.text_input("Password Baru", value=str(row.get('password', '')), type="password", key=f"edit_pwd_adm_{idx}")
                     with col_e2:
                         default_idx = opsi_sekolah_admin.index(sekolah) if sekolah in opsi_sekolah_admin else 0
-                        edit_sch = st.selectbox("Akses Sekolah", opsi_sekolah_admin, index=default_idx, key=f"sch_{idx}")
+                        edit_sch = st.selectbox("Akses Sekolah", opsi_sekolah_admin, index=default_idx, key=f"edit_sch_adm_{idx}")
                         
                     col_b1, col_b2 = st.columns(2)
                     with col_b1:
@@ -977,18 +976,18 @@ elif st.session_state.role == "Superadmin":
             st.warning("Belum ada data pegawai.")
         else:
             with st.form("form_izin"):
-                pilihan_pegawai = st.selectbox("Pilih Pegawai:", st.session_state.employees['name'].tolist())
-                jenis_absen = st.selectbox("Status Kehadiran:", ["Sakit", "Izin", "Cuti", "Dinas Luar"])
+                pilihan_pegawai = st.selectbox("Pilih Pegawai:", st.session_state.employees['name'].tolist(), key="sel_peg_izin")
+                jenis_absen = st.selectbox("Status Kehadiran:", ["Sakit", "Izin", "Cuti", "Dinas Luar"], key="sel_jenis_izin")
                 
                 col_tgl1, col_tgl2 = st.columns(2)
                 with col_tgl1:
-                    tanggal_mulai = st.date_input("Dari Tanggal")
+                    tanggal_mulai = st.date_input("Dari Tanggal", key="tgl_mulai_izin")
                 with col_tgl2:
-                    tanggal_selesai = st.date_input("Sampai Tanggal")
+                    tanggal_selesai = st.date_input("Sampai Tanggal", key="tgl_selesai_izin")
                     
-                file_surat = st.file_uploader("Upload Bukti Surat (PDF/JPG/PNG)", type=['pdf', 'jpg', 'jpeg', 'png'])
+                file_surat = st.file_uploader("Upload Bukti Surat (PDF/JPG/PNG)", type=['pdf', 'jpg', 'jpeg', 'png'], key="uploader_surat_izin")
                 
-                if st.form_submit_button("Simpan Data Absensi"):
+                if st.form_submit_button("Simpan Data Absensi", key="btn_sub_izin"):
                     if tanggal_selesai < tanggal_mulai:
                         st.error("Error: 'Sampai Tanggal' tidak boleh lebih awal dari 'Dari Tanggal'.")
                     elif file_surat is not None:
@@ -1026,11 +1025,11 @@ elif st.session_state.role == "Superadmin":
         st.warning("Perhatian! Menghapus data di sini tidak dapat dikembalikan.")
         col1, col2 = st.columns(2)
         with col1:
-            if st.button("🗑️ Kosongkan Data Absensi"):
+            if st.button("🗑️ Kosongkan Data Absensi", key="btn_reset_absensi"):
                 supabase.table('absensi').delete().neq('nip', '').execute()
                 st.success("Tabel absensi di database dibersihkan!")
         with col2:
-            if st.button("🚨 Reset Semua Pegawai"):
+            if st.button("🚨 Reset Semua Pegawai", key="btn_reset_pegawai"):
                 supabase.table('pegawai').delete().neq('nip', '').execute()
                 st.session_state.employees = pd.DataFrame()
                 st.success("Data pegawai telah di-reset!")
@@ -1045,10 +1044,10 @@ elif st.session_state.role == "Superadmin":
         waktu_pulang_obj = datetime.datetime.strptime(waktu_pulang_str, '%H:%M').time()
         
         with st.form("form_waktu"):
-            new_batas_masuk = st.time_input("Batas Waktu Absen Masuk (Di atas jam ini = Terlambat)", waktu_masuk_obj)
-            new_batas_pulang = st.time_input("Batas Waktu Absen Pulang (Di bawah jam ini = Pulang Awal)", waktu_pulang_obj)
+            new_batas_masuk = st.time_input("Batas Waktu Absen Masuk (Di atas jam ini = Terlambat)", waktu_masuk_obj, key="inp_jam_masuk")
+            new_batas_pulang = st.time_input("Batas Waktu Absen Pulang (Di bawah jam ini = Pulang Awal)", waktu_pulang_obj, key="inp_jam_pulang")
             
-            if st.form_submit_button("Simpan Pengaturan Waktu", type="primary"):
+            if st.form_submit_button("Simpan Pengaturan Waktu", type="primary", key="btn_sub_waktu"):
                 batas_masuk_format = new_batas_masuk.strftime('%H:%M')
                 batas_pulang_format = new_batas_pulang.strftime('%H:%M')
                 
