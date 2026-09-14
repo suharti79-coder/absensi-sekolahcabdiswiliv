@@ -799,32 +799,39 @@ elif st.session_state.role == "Superadmin":
         csv_template = template_df.to_csv(index=False).encode('utf-8')
         st.download_button("📥 1. Download Template CSV", data=csv_template, file_name="Template_Data_Pegawai.csv", mime="text/csv", key="dl_csv_template")
         
-        file_upload = st.file_uploader("2. Upload File Template yang sudah diisi", type=['csv'], key="uploader_csv_pegawai")
+       file_upload = st.file_uploader("2. Upload File Template yang sudah diisi", type=['csv'], key="uploader_csv_pegawai")
         if file_upload is not None:
             if st.button("Proses Upload", key="btn_proses_csv"):
                 try:
-                    df_upload = pd.read_csv(file_upload)
+                    # 1. Tambahkan dtype=str agar NIP panjang tidak rusak menjadi float
+                    df_upload = pd.read_csv(file_upload, dtype=str)
                     
-                    # Hapus baris yang sepenuhnya kosong jika ada
-                    df_upload = df_upload.dropna(how='all')
-
-                    # Cek jika terdapat sel kosong (NaN) yang menyebabkan error JSON float
-                    if df_upload[['nip', 'name', 'school_name']].isnull().values.any():
-                        tampilkan_peringatan_csv()
-                    elif all(col in df_upload.columns for col in ['nip', 'name', 'school_name']):
-                        df_upload = df_upload.fillna("")
-                        df_upload['photo_uploaded'] = False
-                        df_upload['photo_base64'] = ''
-                        df_upload['is_cadar'] = False
-                        df_upload['nip'] = df_upload['nip'].astype(str)
-                        
-                        records = df_upload.to_dict(orient='records')
-                        supabase.table('pegawai').upsert(records, on_conflict='nip').execute()
-                        st.session_state.employees = get_data_pegawai()
-                        st.success(f"Berhasil mengunggah {len(df_upload)} data pegawai!")
-                        st.rerun()
+                    # 2. Validasi format kolom DULU sebelum mengecek isinya
+                    if not all(col in df_upload.columns for col in ['nip', 'name', 'school_name']):
+                        st.error("Format kolom salah! Pastikan file memiliki tepat kolom: nip, name, school_name.")
                     else:
-                        st.error("Format kolom salah! Pastikan file memiliki kolom: nip, name, school_name.")
+                        # 3. Hapus baris bayangan jika ketiga kolom utama ini kosong
+                        df_upload = df_upload.dropna(subset=['nip', 'name', 'school_name'], how='all')
+
+                        # 4. Cek apakah masih ada sel bolong di tengah data yang tersisa
+                        if df_upload[['nip', 'name', 'school_name']].isnull().values.any():
+                            tampilkan_peringatan_csv()
+                        else:
+                            df_upload = df_upload.fillna("")
+                            df_upload['photo_uploaded'] = False
+                            df_upload['photo_base64'] = ''
+                            df_upload['is_cadar'] = False
+                            
+                            # Bersihkan spasi tidak sengaja pada NIP
+                            df_upload['nip'] = df_upload['nip'].str.strip()
+                            
+                            records = df_upload.to_dict(orient='records')
+                            supabase.table('pegawai').upsert(records, on_conflict='nip').execute()
+                            st.session_state.employees = get_data_pegawai()
+                            st.success(f"Berhasil mengunggah {len(df_upload)} data pegawai!")
+                            time.sleep(0.5)
+                            st.rerun()
+                            
                 except Exception as e:
                     if "Out of range float values are not JSON compliant" in str(e):
                         tampilkan_peringatan_csv()
