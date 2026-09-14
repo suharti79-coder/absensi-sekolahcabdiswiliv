@@ -180,8 +180,8 @@ if 'admin_sekolah' not in st.session_state:
 if 'logout_triggered' not in st.session_state:
     st.session_state.logout_triggered = False
 
-raw_token = cookie_manager.get(cookie="auth_token", key="get_raw_token_auth_main")
-saved_admin_school = cookie_manager.get(cookie="admin_sekolah", key="get_admin_school_main")
+raw_token = cookie_manager.get("auth_token")
+saved_admin_school = cookie_manager.get("admin_sekolah")
 if saved_admin_school:
     st.session_state.admin_sekolah = saved_admin_school
 
