@@ -790,31 +790,31 @@ elif st.session_state.role == "Superadmin":
         
         st.write("---")
         st.markdown("### 2. Tambah Pegawai (Upload Excel/CSV Massal)")
-        
         template_df = pd.DataFrame({
             'nip': ['198001012005011001', '198203042008012003'],
             'name': ['Ahmad Guru', 'Siti Pengajar'],
             'school_name': ['Sekolah Default', 'Sekolah Default']
         })
+        
         # Membuat file Excel di dalam memori (buffer)
-buffer_excel = io.BytesIO()
-with pd.ExcelWriter(buffer_excel, engine='openpyxl') as writer:
-    template_df.to_excel(writer, index=False, sheet_name='Template Pegawai')
-
-st.download_button(
-    label="📥 1. Download Template Excel", 
-    data=buffer_excel.getvalue(), 
-    file_name="Template_Data_Pegawai.xlsx", 
-    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", 
-    key="dl_excel_template"
-)
+        buffer_excel = io.BytesIO()
+        with pd.ExcelWriter(buffer_excel, engine='openpyxl') as writer:
+            template_df.to_excel(writer, index=False, sheet_name='Template Pegawai')
+        
+        st.download_button(
+            label="📥 1. Download Template Excel", 
+            data=buffer_excel.getvalue(), 
+            file_name="Template_Data_Pegawai.xlsx", 
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", 
+            key="dl_excel_template"
+        )
         
         file_upload = st.file_uploader("2. Upload File Template yang sudah diisi (Excel)", type=['xlsx', 'xls'], key="uploader_excel_pegawai")
-if file_upload is not None:
-    if st.button("Proses Upload", key="btn_proses_excel"):
-        try:
-            # Menggunakan read_excel untuk membaca file .xlsx
-            df_upload = pd.read_excel(file_upload, dtype=str)
+        if file_upload is not None:
+            if st.button("Proses Upload", key="btn_proses_excel"):
+                try:
+                    # Menggunakan read_excel untuk membaca file .xlsx
+                    df_upload = pd.read_excel(file_upload, dtype=str)
                     
                     # 2. Validasi format kolom DULU sebelum mengecek isinya
                     if not all(col in df_upload.columns for col in ['nip', 'name', 'school_name']):
