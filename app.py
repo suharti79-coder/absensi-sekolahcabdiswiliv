@@ -799,7 +799,7 @@ elif st.session_state.role == "Superadmin":
         csv_template = template_df.to_csv(index=False).encode('utf-8')
         st.download_button("📥 1. Download Template CSV", data=csv_template, file_name="Template_Data_Pegawai.csv", mime="text/csv", key="dl_csv_template")
         
-       file_upload = st.file_uploader("2. Upload File Template yang sudah diisi", type=['csv'], key="uploader_csv_pegawai")
+        file_upload = st.file_uploader("2. Upload File Template yang sudah diisi", type=['csv'], key="uploader_csv_pegawai")
         if file_upload is not None:
             if st.button("Proses Upload", key="btn_proses_csv"):
                 try:
