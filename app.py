@@ -71,8 +71,6 @@ st.set_page_config(page_title="Sistem Absensi Sekolah Cabdis Wil IV", page_icon=
 
 cookie_manager = stx.CookieManager(key="cookie_manager_utama")
 
-# Folder lokal (DIR_SURAT) dihapus karena sudah pakai Supabase Storage
-
 # --- 3. KUSTOMISASI TAMPILAN (CUSTOM CSS) ---
 st.markdown("""
     <style>
@@ -179,10 +177,16 @@ if 'settings' not in st.session_state:
 
 if 'role' not in st.session_state:
     st.session_state.role = None
+if 'admin_sekolah' not in st.session_state:
+    st.session_state.admin_sekolah = "Semua Sekolah"
 if 'logout_triggered' not in st.session_state:
     st.session_state.logout_triggered = False
 
 raw_token = cookie_manager.get(cookie="auth_token")
+saved_admin_school = cookie_manager.get(cookie="admin_sekolah")
+if saved_admin_school:
+    st.session_state.admin_sekolah = saved_admin_school
+
 valid_role = verify_and_get_role(raw_token)
 
 if st.session_state.role is not None:
@@ -197,15 +201,18 @@ else:
         st.session_state.role = None
         try:
             cookie_manager.delete("auth_token", key="force_del_auth")
+            cookie_manager.delete("admin_sekolah", key="force_del_admin_sch")
         except KeyError:
             pass
 
 def logout():
     st.session_state.role = None
+    st.session_state.admin_sekolah = "Semua Sekolah"
     st.session_state.logout_triggered = True  
     try:
         cookie_manager.delete("auth_token", key="delete_auth_token")
         cookie_manager.delete("role", key="delete_role") 
+        cookie_manager.delete("admin_sekolah", key="delete_admin_sekolah") 
     except KeyError:
         pass
 
@@ -233,13 +240,19 @@ if st.session_state.role is None:
             if st.button("Masuk Admin", width="stretch", key="btn_admin_main"):
                 df_adm = get_data_admin()
                 is_valid = False
+                assigned_school = "Semua Sekolah"
+                
                 if not df_adm.empty and 'username' in df_adm.columns:
                     match = df_adm[(df_adm['username'] == input_user_admin) & (df_adm['password'] == pwd)]
                     if not match.empty:
                         is_valid = True
+                        assigned_school = match.iloc[0]['sekolah'] # Ambil unit kerja dari database
+                        
                 if is_valid: 
                     st.session_state.role = "Admin"
+                    st.session_state.admin_sekolah = assigned_school
                     cookie_manager.set("auth_token", generate_signed_token("Admin"))
+                    cookie_manager.set("admin_sekolah", assigned_school)
                     time.sleep(0.5)
                     st.rerun()
                 else: 
@@ -264,6 +277,8 @@ if st.session_state.role is None:
 # ==========================================
 st.sidebar.title("Informasi Akun")
 st.sidebar.success(f"Akses: **{st.session_state.role}**")
+if st.session_state.role == "Admin":
+    st.sidebar.caption(f"Unit Kerja: {st.session_state.admin_sekolah}")
 st.sidebar.button("🚪 Keluar (Logout)", on_click=logout, key="btn_logout_utama")
 st.sidebar.write("---")
 
@@ -329,13 +344,11 @@ if st.session_state.role == "Pegawai":
                             bytes_data = img_camera.getvalue()
                             cam_base64 = f"data:image/jpeg;base64,{base64.b64encode(bytes_data).decode('utf-8')}"
                             
-                            # UPLOAD FOTO PRESENSI KE SUPABASE STORAGE
                             tgl_sekarang_str = datetime.datetime.now(pytz.timezone('Asia/Makassar')).strftime('%Y%m%d_%H%M%S')
                             path_harian = f"foto_presensi/{emp_data['nip']}_{tgl_sekarang_str}.jpg"
                             url_foto_harian = upload_ke_supabase(bytes_data, path_harian, "image/jpeg")
                             
                             if not is_cadar:
-                                # TAMBAHAN PENTING: crossorigin="anonymous" pada tag img refImg
                                 html_code = f"""
                                 <!DOCTYPE html>
                                 <html>
@@ -455,7 +468,7 @@ if st.session_state.role == "Pegawai":
                                         'jam': now.strftime('%H:%M:%S'),
                                         'jarak_m': str(round(jarak_meter, 1)), 
                                         'status': status_final,
-                                        'foto_bukti': url_foto_harian if url_foto_harian else "" # Simpan Link Foto
+                                        'foto_bukti': url_foto_harian if url_foto_harian else "" 
                                     }
                                     
                                     supabase.table('absensi').insert(data_absen_baru).execute()
@@ -477,6 +490,7 @@ elif st.session_state.role == "Admin":
     
     st.session_state.employees = get_data_pegawai()
     st.session_state.schools = get_data_sekolah()
+    admin_akses = st.session_state.get('admin_sekolah', 'Semua Sekolah')
     
     if st.session_state.employees.empty:
          st.warning("Belum ada data pegawai. Minta Superadmin menambah pegawai terlebih dahulu.")
@@ -485,8 +499,13 @@ elif st.session_state.role == "Admin":
         
         col_f1, col_f2 = st.columns(2)
         with col_f1:
-            opsi_sekolah_foto = ["Semua Sekolah"] + st.session_state.schools['school_name'].tolist()
-            sekolah_pilihan_foto = st.selectbox("🏢 Filter Sekolah:", opsi_sekolah_foto, key="filter_sekolah_foto")
+            if admin_akses == "Semua Sekolah":
+                opsi_sekolah_foto = ["Semua Sekolah"] + st.session_state.schools['school_name'].tolist()
+                sekolah_pilihan_foto = st.selectbox("🏢 Filter Sekolah:", opsi_sekolah_foto, key="filter_sekolah_foto")
+            else:
+                st.info(f"Akses Unit Kerja: {admin_akses}")
+                sekolah_pilihan_foto = st.selectbox("🏢 Filter Sekolah:", [admin_akses], disabled=True, key="filter_sekolah_foto")
+                
         with col_f2:
             search_query_foto = st.text_input("🔍 Cari NIP atau Nama:", placeholder="Ketik NIP atau Nama spesifik...", key="search_admin_foto")
         
@@ -538,7 +557,6 @@ elif st.session_state.role == "Admin":
                                 foto = st.file_uploader("Pilih Pas Foto Baru", type=['jpg', 'jpeg', 'png'], key=f"foto_{nip}")
                                 
                                 if foto and st.button("💾 Simpan & Update Foto", type="primary", key=f"btn_{nip}", use_container_width=True):
-                                    # UPLOAD FOTO ACUAN KE SUPABASE STORAGE
                                     file_bytes = foto.getvalue()
                                     path_simpan = f"foto_acuan/{nip}.jpg"
                                     url_foto = upload_ke_supabase(file_bytes, path_simpan, foto.type)
@@ -546,7 +564,7 @@ elif st.session_state.role == "Admin":
                                     if url_foto:
                                         supabase.table('pegawai').update({
                                             'photo_uploaded': True,
-                                            'photo_base64': url_foto # Menyimpan Link Foto Supabase
+                                            'photo_base64': url_foto 
                                         }).eq('nip', nip).execute()
                                         
                                         st.success("✅ Foto berhasil diperbarui, disimpan di Cloud, dan dikunci!")
@@ -560,8 +578,11 @@ elif st.session_state.role == "Admin":
     with col_tgl:
         tgl_pilihan = st.date_input("Pilih Tanggal Rekap:", datetime.datetime.now(pytz.timezone('Asia/Makassar')).date())
     with col_sch:
-        opsi_sekolah = ["Semua Sekolah"] + st.session_state.schools['school_name'].tolist()
-        sekolah_pilihan = st.selectbox("Filter Sekolah:", opsi_sekolah)
+        if admin_akses == "Semua Sekolah":
+            opsi_sekolah = ["Semua Sekolah"] + st.session_state.schools['school_name'].tolist()
+            sekolah_pilihan = st.selectbox("Filter Sekolah:", opsi_sekolah, key="filter_sekolah_rekap")
+        else:
+            sekolah_pilihan = st.selectbox("Filter Sekolah:", [admin_akses], disabled=True, key="filter_sekolah_rekap")
     
     df_emp = st.session_state.employees.copy()
     if sekolah_pilihan != "Semua Sekolah":
@@ -975,7 +996,6 @@ elif st.session_state.role == "Superadmin":
                         file_ext = file_surat.name.split('.')[-1]
                         file_name = f"{emp_data['nip']}_{jenis_absen}_{tanggal_mulai.strftime('%Y%m%d')}_sd_{tanggal_selesai.strftime('%Y%m%d')}.{file_ext}"
                         
-                        # UPLOAD SURAT IZIN KE SUPABASE STORAGE
                         path_simpan = f"surat_izin/{file_name}"
                         url_surat = upload_ke_supabase(file_surat.getvalue(), path_simpan, file_surat.type)
                         
@@ -991,7 +1011,7 @@ elif st.session_state.role == "Superadmin":
                                     'sekolah': emp_data['school_name'],
                                     'tanggal': tgl.strftime('%Y-%m-%d'), 
                                     'jam': '-',
-                                    'jarak_m': url_surat, # Link Surat disimpan di sini
+                                    'jarak_m': url_surat, 
                                     'status': jenis_absen,
                                     'foto_bukti': ''
                                 })
