@@ -9,3 +9,4 @@ pandas
 numpy
 opencv-python-headless
 openpyxl>=3.1.5
+xlsxwriter==3.1.9
