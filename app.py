@@ -1210,7 +1210,7 @@ elif st.session_state.role == "Superadmin":
                     st.error(f"❌ Terjadi kesalahan: {e}")
 
     with tab6:
-        st.markdown("### ⚙️ Pengaturan Batas Waktu Absensi")
+        st.markdown("### ⚙️ Pengaturan Batas Waktu Absensi by GHAZALI")
         
         waktu_masuk_str = st.session_state.settings['batas_masuk'].iloc[0]
         waktu_pulang_str = st.session_state.settings['batas_pulang'].iloc[0]
