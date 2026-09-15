@@ -665,7 +665,7 @@ elif st.session_state.role == "Admin":
                                     time.sleep(1)
                                     st.rerun()
 
-    st.markdown("### 3. Laporan & Rekap Harian Absensi")
+    st.markdown("### 📋 3. Laporan & Rekap Harian Absensi")
     
     with st.form("form_filter_rekap"):
         col_tgl, col_sch = st.columns(2)
