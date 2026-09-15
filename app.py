@@ -1085,43 +1085,70 @@ elif st.session_state.role == "Superadmin":
                         st.error("Harap unggah file bukti surat terlebih dahulu sebelum menyimpan.")
                         
     with tab5:
-        st.markdown("### Reset Data Sistem")
-        st.warning("Perhatian! Menghapus data di sini tidak dapat dikembalikan AJJA MAKECCA LANDRE LIMAMMU.")
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button("🗑️ Kosongkan Data Absensi", key="btn_reset_absensi"):
-                with st.spinner("Sedang menghapus data absensi dan file foto fisik dari server..."):
-                    try:
-                        # 1. Ambil semua data absensi yang memiliki URL foto
-                        res = supabase.table('absensi').select('foto_bukti').neq('foto_bukti', '').execute()
-                        
-                        if res.data:
-                            file_paths = []
-                            for row in res.data:
-                                url_foto = row.get('foto_bukti', '')
-                                # 2. Ekstrak nama path file dari URL publiknya
-                                # Memisahkan URL berdasarkan nama bucket 'absensi-files/'
-                                if 'absensi-files/' in url_foto:
-                                    # Mengambil string path setelah nama bucket (misal: foto_presensi/123_2026.jpg)
-                                    file_path = url_foto.split('absensi-files/')[-1]
-                                    file_paths.append(file_path)
-                            
-                            # 3. Kirim perintah hapus ke Supabase Storage (bisa menghapus banyak file sekaligus)
-                            if file_paths:
-                                supabase.storage.from_("absensi-files").remove(file_paths)
-                        
-                        # 4. Setelah foto fisik dihapus, baru hapus baris teks dari tabel database
-                        supabase.table('absensi').delete().neq('nip', '').execute()
-                        st.success("✅ Tabel absensi DAN file foto bukti fisik berhasil dibersihkan secara permanen!")
+        st.markdown("### 🚨 Reset Data Sistem")
+        st.warning("Perhatian! Harap berhati-hati. ABBACA KO GHAZALI Silakan pilih jenis data yang ingin dihapus sesuai kebutuhan.")
+        
+        # --- TOMBOL 1 ---
+        st.markdown("#### 1. TOMBOL RESET SEMUA PEGAWAI")
+        st.caption("Menghapus **SELURUH DATA PEGAWAI** dari sistem (termasuk foto acuan/pendaftaran dari admin).")
+        if st.button("🗑️ Reset Semua Pegawai", key="btn_super_reset_pegawai", type="primary"):
+            with st.spinner("Sedang menghapus semua data pegawai..."):
+                try:
+                    supabase.table('pegawai').delete().neq('nip', '').execute()
+                    st.session_state.employees = pd.DataFrame()
+                    st.success("✅ Seluruh data pegawai berhasil dihapus!")
+                except Exception as e:
+                    st.error(f"❌ Terjadi kesalahan: {e}")
                     
-                    except Exception as e:
-                        st.error(f"❌ Terjadi kesalahan saat menghapus data: {e}")
-                        
-        with col2:
-            if st.button("🚨 Reset Semua Pegawai", key="btn_reset_pegawai"):
-                supabase.table('pegawai').delete().neq('nip', '').execute()
-                st.session_state.employees = pd.DataFrame()
-                st.success("Data pegawai telah di-reset!")
+        st.write("---")
+        
+        # --- TOMBOL 2 ---
+        st.markdown("#### 2. TOMBOL RESET DATA ABSENSI")
+        st.caption("Menghapus **DATA TEKS KEHADIRAN** (Jam Masuk/Pulang) sekaligus **FOTO HARIAN (Rekam Wajah)**. Rekap bulanan admin akan ikut hilang/kosong.")
+        if st.button("🚨 Reset Data Absensi Total", key="btn_super_reset_absen_total"):
+            with st.spinner("Sedang menghapus data teks dan foto harian secara total..."):
+                try:
+                    # 1. Hapus file foto fisik dari Storage
+                    res = supabase.table('absensi').select('foto_bukti').neq('foto_bukti', '').execute()
+                    if res.data:
+                        file_paths = []
+                        for row in res.data:
+                            url = row.get('foto_bukti', '')
+                            if 'absensi-files/' in url:
+                                file_paths.append(url.split('absensi-files/')[-1])
+                        if file_paths:
+                            supabase.storage.from_("absensi-files").remove(file_paths)
+                            
+                    # 2. Hapus total baris data dari tabel absensi
+                    supabase.table('absensi').delete().neq('nip', '').execute()
+                    st.success("✅ Data teks absensi DAN foto bukti harian berhasil dihapus total!")
+                except Exception as e:
+                    st.error(f"❌ Terjadi kesalahan: {e}")
+                    
+        st.write("---")
+        
+        # --- TOMBOL 3 ---
+        st.markdown("#### 3. TOMBOL RESET DATA FOTO SAJA")
+        st.caption("Hanya menghapus file **FOTO FISIK HARIAN** untuk menghemat kapasitas server. **DATA TEKS KEHADIRAN TETAP AMAN** dan Admin masih bisa mendownload rekap bulanannya.")
+        if st.button("🖼️ Reset Data Foto Saja (Teks Aman)", key="btn_super_reset_foto_saja"):
+            with st.spinner("Sedang membersihkan foto fisik dari server... (Data teks aman)"):
+                try:
+                    # 1. Hapus file foto fisik dari Storage
+                    res = supabase.table('absensi').select('foto_bukti').neq('foto_bukti', '').execute()
+                    if res.data:
+                        file_paths = []
+                        for row in res.data:
+                            url = row.get('foto_bukti', '')
+                            if 'absensi-files/' in url:
+                                file_paths.append(url.split('absensi-files/')[-1])
+                        if file_paths:
+                            supabase.storage.from_("absensi-files").remove(file_paths)
+                            
+                    # 2. HANYA KOSONGKAN link URL-nya saja, TAPI data baris teks tidak dihapus
+                    supabase.table('absensi').update({'foto_bukti': ''}).neq('foto_bukti', '').execute()
+                    st.success("✅ File foto harian berhasil dibersihkan! Data teks jam masuk/pulang tetap utuh dan aman.")
+                except Exception as e:
+                    st.error(f"❌ Terjadi kesalahan: {e}")
 
     with tab6:
         st.markdown("### ⚙️ Pengaturan Batas Waktu Absensi")
