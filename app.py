@@ -596,119 +596,136 @@ elif st.session_state.role == "Admin":
 
     st.markdown("### 2. Laporan & Rekap Absensi")
     
-    col_tgl, col_sch = st.columns(2)
-    with col_tgl:
-        tgl_pilihan = st.date_input("Pilih Tanggal Rekap:", datetime.datetime.now(pytz.timezone('Asia/Makassar')).date(), key="tgl_rekap_admin_input")
-    with col_sch:
-        if admin_akses == "Semua Sekolah":
-            opsi_sekolah = ["Semua Sekolah"] + st.session_state.schools['school_name'].tolist()
-            sekolah_pilihan = st.selectbox("Filter Sekolah:", opsi_sekolah, key="filter_sekolah_rekap_all")
-        else:
-            sekolah_pilihan = st.selectbox("Filter Sekolah:", [admin_akses], disabled=True, key="filter_sekolah_rekap_locked")
+    st.markdown("### 2. Laporan & Rekap Absensi")
     
-    df_emp = st.session_state.employees.copy()
-    if sekolah_pilihan != "Semua Sekolah":
-        df_emp = df_emp[df_emp['school_name'] == sekolah_pilihan]
-        
-    if df_emp.empty:
-        st.warning(f"Tidak ada pegawai terdaftar pada unit {sekolah_pilihan}.")
-    else:
-        tgl_str = tgl_pilihan.strftime('%Y-%m-%d')
-        try:
-            res_absen_admin = supabase.table('absensi').select('*').eq('tanggal', tgl_str).execute()
-            if res_absen_admin.data:
-                df_absen_tgl = pd.DataFrame(res_absen_admin.data)
-                if 'nip' in df_absen_tgl.columns:
-                    df_absen_tgl['nip'] = df_absen_tgl['nip'].astype(str)
+    with st.form("form_filter_rekap"):
+        col_tgl, col_sch = st.columns(2)
+        with col_tgl:
+            tgl_pilihan = st.date_input("Pilih Tanggal Rekap:", datetime.datetime.now(pytz.timezone('Asia/Makassar')).date(), key="tgl_rekap_admin_input")
+        with col_sch:
+            if admin_akses == "Semua Sekolah":
+                opsi_sekolah = ["-- Pilih Sekolah --", "Semua Sekolah"] + st.session_state.schools['school_name'].tolist()
+                sekolah_pilihan = st.selectbox("Filter Sekolah:", opsi_sekolah, key="filter_sekolah_rekap_all")
             else:
-                df_absen_tgl = pd.DataFrame(columns=['nip', 'nama', 'sekolah', 'tanggal', 'jam', 'jarak_m', 'status'])
-        except Exception as e:
-            print(f"Error query absen: {e}")
-            df_absen_tgl = pd.DataFrame(columns=['nip', 'nama', 'sekolah', 'tanggal', 'jam', 'jarak_m', 'status'])
+                sekolah_pilihan = st.selectbox("Filter Sekolah:", [admin_akses], disabled=True, key="filter_sekolah_rekap_locked")
         
-        rekap_list = []
-        for index, emp in df_emp.iterrows():
-            nip = str(emp['nip'])
-            nama = emp['name']
-            sekolah = emp['school_name']
-            data_absen_pegawai = df_absen_tgl[df_absen_tgl['nip'] == nip]
-            
-            jam_masuk = '-'
-            jam_pulang = '-'
-            jarak = '-'
-            status_final = 'Tanpa Keterangan'
-            
-            if not data_absen_pegawai.empty:
-                absen_masuk = data_absen_pegawai[data_absen_pegawai['status'].str.contains('Masuk', na=False, case=False)]
-                if not absen_masuk.empty:
-                    jam_masuk = absen_masuk.iloc[0]['jam']
-                    jarak = absen_masuk.iloc[0]['jarak_m']
-                    status_final = absen_masuk.iloc[0]['status']
-                
-                absen_pulang = data_absen_pegawai[data_absen_pegawai['status'].str.contains('Pulang', na=False, case=False)]
-                if not absen_pulang.empty:
-                    jam_pulang = absen_pulang.iloc[0]['jam']
-                    if jarak == '-':
-                        jarak = absen_pulang.iloc[0]['jarak_m']
-                    if not absen_masuk.empty:
-                        status_final = f"{absen_masuk.iloc[0]['status']} & {absen_pulang.iloc[0]['status']}"
-                    else:
-                        status_final = absen_pulang.iloc[0]['status']
-                
-                absen_lainnya = data_absen_pegawai[~data_absen_pegawai['status'].str.contains('Hadir|Masuk|Pulang', na=False, case=False)]
-                if not absen_lainnya.empty:
-                    status_final = absen_lainnya.iloc[0]['status']
-                    jarak = absen_lainnya.iloc[0]['jarak_m']
-                    
-            rekap_list.append({
-                'NIP': nip,
-                'NAMA': nama,
-                'SEKOLAH': sekolah,
-                'TANGGAL': tgl_str,
-                'JARAK': str(jarak),
-                'MASUK': jam_masuk,
-                'PULANG': jam_pulang,
-                'STATUS': status_final
-            })
-            
-        df_rekap = pd.DataFrame(rekap_list)
-        total_pegawai = len(df_rekap)
-        hadir_count = len(df_rekap[df_rekap['STATUS'].str.contains('Hadir|Masuk|Pulang', na=False)])
-        tanpa_ket_count = len(df_rekap[df_rekap['STATUS'] == 'Tanpa Keterangan'])
-        izin_dll_count = total_pegawai - hadir_count - tanpa_ket_count
-        
-        m1, m2, m3, m4 = st.columns(4)
-        m1.metric("Total Pegawai", total_pegawai)
-        m2.metric("Hadir", hadir_count)
-        m3.metric("Izin/Sakit/Cuti/Dinas", izin_dll_count)
-        m4.metric("Tanpa Keterangan", tanpa_ket_count)
-        
-        def warnai_status(val):
-            if isinstance(val, str):
-                if 'TERLAMBAT' in val or 'LEBIH AWAL' in val:
-                    return 'color: #D9534F; font-weight: bold;'
-                elif 'Tepat Waktu' in val:
-                    return 'color: #5CB85C; font-weight: bold;'
-                elif 'Audit' in val:
-                    return 'color: #0275d8; font-style: italic;'
-                elif val == 'Tanpa Keterangan':
-                    return 'color: #F0AD4E;'
-            return ''
+        btn_tampilkan = st.form_submit_button("📊 TAMPILKAN DATA", type="primary")
 
-        df_berwarna = df_rekap.style.map(warnai_status, subset=['STATUS'])
-        st.dataframe(df_berwarna, width="stretch")
-        
-        buffer = io.BytesIO()
-        with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
-            df_rekap.to_excel(writer, index=False, sheet_name='Rekap Absensi')
+    # Menyimpan status tombol agar tabel tidak hilang saat download excel
+    if 'show_data_rekap' not in st.session_state:
+        st.session_state.show_data_rekap = False
+
+    if btn_tampilkan:
+        if admin_akses == "Semua Sekolah" and sekolah_pilihan == "-- Pilih Sekolah --":
+            st.warning("⚠️ Harap pilih sekolah terlebih dahulu sebelum menampilkan data.")
+            st.session_state.show_data_rekap = False
+        else:
+            st.session_state.show_data_rekap = True
+
+    if st.session_state.show_data_rekap:
+        df_emp = st.session_state.employees.copy()
+        if sekolah_pilihan != "Semua Sekolah":
+            df_emp = df_emp[df_emp['school_name'] == sekolah_pilihan]
             
-        st.download_button(
-            label="📥 Download Rekap Absensi (Excel)",
-            data=buffer.getvalue(),
-            file_name=f"Rekap_Absensi_{sekolah_pilihan.replace(' ', '_')}_{tgl_str}.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            key="dl_rekap_admin_excel"
-        )
+        if df_emp.empty:
+            st.warning(f"Tidak ada pegawai terdaftar pada unit {sekolah_pilihan}.")
+        else:
+            tgl_str = tgl_pilihan.strftime('%Y-%m-%d')
+            try:
+                res_absen_admin = supabase.table('absensi').select('*').eq('tanggal', tgl_str).execute()
+                if res_absen_admin.data:
+                    df_absen_tgl = pd.DataFrame(res_absen_admin.data)
+                    if 'nip' in df_absen_tgl.columns:
+                        df_absen_tgl['nip'] = df_absen_tgl['nip'].astype(str)
+                else:
+                    df_absen_tgl = pd.DataFrame(columns=['nip', 'nama', 'sekolah', 'tanggal', 'jam', 'jarak_m', 'status'])
+            except Exception as e:
+                print(f"Error query absen: {e}")
+                df_absen_tgl = pd.DataFrame(columns=['nip', 'nama', 'sekolah', 'tanggal', 'jam', 'jarak_m', 'status'])
+            
+            rekap_list = []
+            for index, emp in df_emp.iterrows():
+                nip = str(emp['nip'])
+                nama = emp['name']
+                sekolah = emp['school_name']
+                data_absen_pegawai = df_absen_tgl[df_absen_tgl['nip'] == nip]
+                
+                jam_masuk = '-'
+                jam_pulang = '-'
+                jarak = '-'
+                status_final = 'Tanpa Keterangan'
+                
+                if not data_absen_pegawai.empty:
+                    absen_masuk = data_absen_pegawai[data_absen_pegawai['status'].str.contains('Masuk', na=False, case=False)]
+                    if not absen_masuk.empty:
+                        jam_masuk = absen_masuk.iloc[0]['jam']
+                        jarak = absen_masuk.iloc[0]['jarak_m']
+                        status_final = absen_masuk.iloc[0]['status']
+                    
+                    absen_pulang = data_absen_pegawai[data_absen_pegawai['status'].str.contains('Pulang', na=False, case=False)]
+                    if not absen_pulang.empty:
+                        jam_pulang = absen_pulang.iloc[0]['jam']
+                        if jarak == '-':
+                            jarak = absen_pulang.iloc[0]['jarak_m']
+                        if not absen_masuk.empty:
+                            status_final = f"{absen_masuk.iloc[0]['status']} & {absen_pulang.iloc[0]['status']}"
+                        else:
+                            status_final = absen_pulang.iloc[0]['status']
+                    
+                    absen_lainnya = data_absen_pegawai[~data_absen_pegawai['status'].str.contains('Hadir|Masuk|Pulang', na=False, case=False)]
+                    if not absen_lainnya.empty:
+                        status_final = absen_lainnya.iloc[0]['status']
+                        jarak = absen_lainnya.iloc[0]['jarak_m']
+                        
+                rekap_list.append({
+                    'NIP': nip,
+                    'NAMA': nama,
+                    'SEKOLAH': sekolah,
+                    'TANGGAL': tgl_str,
+                    'JARAK': str(jarak),
+                    'MASUK': jam_masuk,
+                    'PULANG': jam_pulang,
+                    'STATUS': status_final
+                })
+                
+            df_rekap = pd.DataFrame(rekap_list)
+            total_pegawai = len(df_rekap)
+            hadir_count = len(df_rekap[df_rekap['STATUS'].str.contains('Hadir|Masuk|Pulang', na=False)])
+            tanpa_ket_count = len(df_rekap[df_rekap['STATUS'] == 'Tanpa Keterangan'])
+            izin_dll_count = total_pegawai - hadir_count - tanpa_ket_count
+            
+            m1, m2, m3, m4 = st.columns(4)
+            m1.metric("Total Pegawai", total_pegawai)
+            m2.metric("Hadir", hadir_count)
+            m3.metric("Izin/Sakit/Cuti/Dinas", izin_dll_count)
+            m4.metric("Tanpa Keterangan", tanpa_ket_count)
+            
+            def warnai_status(val):
+                if isinstance(val, str):
+                    if 'TERLAMBAT' in val or 'LEBIH AWAL' in val:
+                        return 'color: #D9534F; font-weight: bold;'
+                    elif 'Tepat Waktu' in val:
+                        return 'color: #5CB85C; font-weight: bold;'
+                    elif 'Audit' in val:
+                        return 'color: #0275d8; font-style: italic;'
+                    elif val == 'Tanpa Keterangan':
+                        return 'color: #F0AD4E;'
+                return ''
+
+            df_berwarna = df_rekap.style.map(warnai_status, subset=['STATUS'])
+            st.dataframe(df_berwarna, width="stretch")
+            
+            buffer = io.BytesIO()
+            with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+                df_rekap.to_excel(writer, index=False, sheet_name='Rekap Absensi')
+                
+            st.download_button(
+                label="📥 Download Rekap Absensi (Excel)",
+                data=buffer.getvalue(),
+                file_name=f"Rekap_Absensi_{sekolah_pilihan.replace(' ', '_')}_{tgl_str}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                key="dl_rekap_admin_excel"
+            )
 
 # ==========================================
 # HAK AKSES 3: SUPERADMIN
