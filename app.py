@@ -1084,14 +1084,39 @@ elif st.session_state.role == "Superadmin":
                     else:
                         st.error("Harap unggah file bukti surat terlebih dahulu sebelum menyimpan.")
                         
-    with tab5:
+   with tab5:
         st.markdown("### Reset Data Sistem")
-        st.warning("Perhatian! Menghapus data di sini tidak dapat dikembalikan.")
+        st.warning("Perhatian! Menghapus data di sini tidak dapat dikembalikan AJJA MAKECCA LANDRE LIMAMMU.")
         col1, col2 = st.columns(2)
         with col1:
             if st.button("🗑️ Kosongkan Data Absensi", key="btn_reset_absensi"):
-                supabase.table('absensi').delete().neq('nip', '').execute()
-                st.success("Tabel absensi di database dibersihkan!")
+                with st.spinner("Sedang menghapus data absensi dan file foto fisik dari server..."):
+                    try:
+                        # 1. Ambil semua data absensi yang memiliki URL foto
+                        res = supabase.table('absensi').select('foto_bukti').neq('foto_bukti', '').execute()
+                        
+                        if res.data:
+                            file_paths = []
+                            for row in res.data:
+                                url_foto = row.get('foto_bukti', '')
+                                # 2. Ekstrak nama path file dari URL publiknya
+                                # Memisahkan URL berdasarkan nama bucket 'absensi-files/'
+                                if 'absensi-files/' in url_foto:
+                                    # Mengambil string path setelah nama bucket (misal: foto_presensi/123_2026.jpg)
+                                    file_path = url_foto.split('absensi-files/')[-1]
+                                    file_paths.append(file_path)
+                            
+                            # 3. Kirim perintah hapus ke Supabase Storage (bisa menghapus banyak file sekaligus)
+                            if file_paths:
+                                supabase.storage.from_("absensi-files").remove(file_paths)
+                        
+                        # 4. Setelah foto fisik dihapus, baru hapus baris teks dari tabel database
+                        supabase.table('absensi').delete().neq('nip', '').execute()
+                        st.success("✅ Tabel absensi DAN file foto bukti fisik berhasil dibersihkan secara permanen!")
+                    
+                    except Exception as e:
+                        st.error(f"❌ Terjadi kesalahan saat menghapus data: {e}")
+                        
         with col2:
             if st.button("🚨 Reset Semua Pegawai", key="btn_reset_pegawai"):
                 supabase.table('pegawai').delete().neq('nip', '').execute()
