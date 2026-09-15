@@ -557,7 +557,7 @@ elif st.session_state.role == "Admin":
             st.info("Buka halaman ini di PC yang bersangkutan, lalu masukkan namanya dan klik daftarkan.")
             nama_pc_input = st.text_input("Nama/Label PC (Cth: PC Lab Komputer 01)", key="inp_nama_pc_baru")
             
-            if st.button("📌 Daftarkan PC Ini Ke Sistem", key="btn_register_pc_dynamic"):
+            if st.button("📌🛠️ Daftarkan PC Ini Ke Sistem", key="btn_register_pc_dynamic"):
                 if admin_akses == "Semua Sekolah":
                     st.error("Akun dengan akses 'Semua Sekolah' tidak bisa mendaftarkan PC. Silakan login sebagai Admin Sekolah spesifik.")
                 elif nama_pc_input.strip():
