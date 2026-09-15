@@ -8,7 +8,7 @@ import pytz
 import base64
 import os
 import time
-import uuid  # <-- DITAMBAHKAN UNTUK GENERATE TOKEN PC
+import uuid
 import geopy.distance
 from streamlit_js_eval import get_geolocation
 import streamlit.components.v1 as components
@@ -329,7 +329,7 @@ if st.session_state.role == "Pegawai":
                 st.error("Data sekolah untuk pegawai ini tidak ditemukan atau telah dihapus.")
                 st.stop()
                 
-            # --- START LOGIKA CEK HAK AKSES PERANGKAT DINAMIS (90+ PC) ---
+            # --- START LOGIKA CEK HAK AKSES PERANGKAT DINAMIS ---
             curr_dev_cookie = cookie_manager.get("school_device_token")
             
             try:
@@ -535,49 +535,55 @@ elif st.session_state.role == "Admin":
     st.session_state.schools = get_data_sekolah()
     admin_akses = st.session_state.get('admin_sekolah', 'Semua Sekolah')
 
-    # --- START LOGIKA PENDAFTARAN PC DINAMIS ADMIN ---
+    # --- START LOGIKA PENDAFTARAN PC DINAMIS ADMIN (MAX 2 PC & TERKUNCI) ---
     st.markdown("### 🖥️ 1. Kelola PC Absensi Sekolah")
-    with st.expander("📌 Pendaftaran & Daftar PC"):
-        st.markdown("##### ➕ Daftarkan PC Ini")
-        st.info("Buka halaman ini di PC yang bersangkutan, lalu masukkan namanya dan klik daftarkan.")
-        nama_pc_input = st.text_input("Nama/Label PC (Cth: PC Lab Komputer 01)", key="inp_nama_pc_baru")
-        
-        if st.button("📌 Daftarkan PC Ini Ke Sistem", key="btn_register_pc_dynamic"):
-            if admin_akses == "Semua Sekolah":
-                st.error("Akun dengan akses 'Semua Sekolah' tidak bisa mendaftarkan PC. Silakan login sebagai Admin Sekolah spesifik.")
-            elif nama_pc_input.strip():
-                new_token = str(uuid.uuid4())
-                cookie_manager.set("school_device_token", new_token, key="set_pc_cookie_dyn")
-                
-                data_pc = {
-                    'school_name': admin_akses, 
-                    'device_id': new_token,
-                    'device_name': nama_pc_input.strip()
-                }
-                supabase.table('perangkat_sekolah').insert(data_pc).execute()
-                st.success(f"✅ PC '{nama_pc_input}' berhasil didaftarkan!")
-                time.sleep(1)
-                st.rerun()
-            else:
-                st.error("Masukkan nama/label PC terlebih dahulu.")
-
-        st.markdown("##### 📋 Daftar PC Terdaftar")
+    with st.expander("📌 Pendaftaran & Daftar PC", expanded=True):
+        list_pc = []
+        total_terdaftar = 0
         try:
             res_pc = supabase.table('perangkat_sekolah').select('*').eq('school_name', admin_akses).execute()
             if res_pc.data:
-                df_pc = pd.DataFrame(res_pc.data)
-                for idx, r_pc in df_pc.iterrows():
-                    col_a, col_b = st.columns([3, 1])
-                    col_a.write(f"🖥️ **{r_pc['device_name']}**")
-                    if col_b.button("🗑️ Hapus", key=f"del_pc_{r_pc['id']}"):
-                        supabase.table('perangkat_sekolah').delete().eq('id', r_pc['id']).execute()
-                        st.success("PC berhasil dihapus dari daftar terdaftar.")
-                        time.sleep(1)
-                        st.rerun()
-            else:
-                st.info("Belum ada PC yang terdaftar untuk sekolah ini.")
+                list_pc = res_pc.data
+                total_terdaftar = len(list_pc)
         except Exception as e:
-            st.error("Gagal memuat data PC. Pastikan tabel perangkat_sekolah sudah dibuat di Supabase.")
+            st.error("Gagal memuat data PC dari server.")
+
+        st.markdown("##### ➕ Daftarkan PC Ini")
+        st.caption(f"Status Kuota Perangkat: **{total_terdaftar} dari 2 PC Terdaftar**")
+
+        if total_terdaftar >= 2:
+            st.warning("🔒 **PENDAFTARAN TERKUNCI!** Sekolah ini telah mencapai batas maksimal pendaftaran (2 PC).\n\nUntuk membuka kunci atau mengganti PC terdaftar, silakan hubungi **Superadmin**.")
+        else:
+            st.info("Buka halaman ini di PC yang bersangkutan, lalu masukkan namanya dan klik daftarkan.")
+            nama_pc_input = st.text_input("Nama/Label PC (Cth: PC Lab Komputer 01)", key="inp_nama_pc_baru")
+            
+            if st.button("📌 Daftarkan PC Ini Ke Sistem", key="btn_register_pc_dynamic"):
+                if admin_akses == "Semua Sekolah":
+                    st.error("Akun dengan akses 'Semua Sekolah' tidak bisa mendaftarkan PC. Silakan login sebagai Admin Sekolah spesifik.")
+                elif nama_pc_input.strip():
+                    new_token = str(uuid.uuid4())
+                    cookie_manager.set("school_device_token", new_token, key="set_pc_cookie_dyn")
+                    
+                    data_pc = {
+                        'school_name': admin_akses, 
+                        'device_id': new_token,
+                        'device_name': nama_pc_input.strip()
+                    }
+                    supabase.table('perangkat_sekolah').insert(data_pc).execute()
+                    st.success(f"✅ PC '{nama_pc_input}' berhasil didaftarkan dan dikunci ke sekolah ini!")
+                    time.sleep(1)
+                    st.rerun()
+                else:
+                    st.error("Masukkan nama/label PC terlebih dahulu.")
+
+        st.markdown("##### 📋 Daftar PC Terdaftar")
+        if list_pc:
+            for r_pc in list_pc:
+                col_a, col_b = st.columns([3, 1])
+                col_a.write(f"🖥️ **{r_pc['device_name']}**")
+                col_b.caption("🔒 Terkunci (Superadmin)")
+        else:
+            st.info("Belum ada PC yang terdaftar untuk sekolah ini.")
     # --- END LOGIKA PENDAFTARAN PC DINAMIS ADMIN ---
     
     st.markdown("### 📸 2. Kelola Foto Acuan Pegawai")
@@ -802,8 +808,9 @@ elif st.session_state.role == "Superadmin":
     st.session_state.schools = get_data_sekolah()
     st.session_state.settings = get_data_pengaturan()
     
-    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+    tab1, tab_pc, tab2, tab3, tab4, tab5, tab6 = st.tabs([
         "🏛️ Kelola Sekolah", 
+        "💻 Kelola PC (Buka Kunci)",
         "👥 Kelola Pegawai", 
         "🔑 Kelola Admin", 
         "📝 Input Izin/Dinas", 
@@ -857,6 +864,40 @@ elif st.session_state.role == "Superadmin":
             st.session_state.schools = get_data_sekolah()
             st.success("Perubahan data sekolah berhasil disimpan secara permanen!")
             st.rerun()
+
+    # --- TAB KHUSUS SUPERADMIN MEMBUKA KUNCI PC ---
+    with tab_pc:
+        st.markdown("### 💻 Buka Kunci & Kelola PC Sekolah")
+        st.info("Superadmin dapat melihat daftar seluruh PC terdaftar dan menghapus/membuka kuncinya agar Admin Sekolah dapat mendaftarkan PC baru.")
+        
+        opsi_sekolah_pc = ["Semua Sekolah"] + st.session_state.schools['school_name'].tolist()
+        sekolah_pilihan_pc = st.selectbox("🏢 Filter Sekolah:", opsi_sekolah_pc, key="filter_sekolah_pc_super")
+        
+        try:
+            query_pc = supabase.table('perangkat_sekolah').select('*')
+            if sekolah_pilihan_pc != "Semua Sekolah":
+                query_pc = query_pc.eq('school_name', sekolah_pilihan_pc)
+            
+            res_pc_super = query_pc.execute()
+            
+            if res_pc_super.data:
+                df_pc_super = pd.DataFrame(res_pc_super.data)
+                st.caption(f"Menampilkan total {len(df_pc_super)} PC terdaftar.")
+                st.write("---")
+                
+                for idx, r_pc in df_pc_super.iterrows():
+                    col_sch, col_dev, col_btn = st.columns([2, 2, 1])
+                    col_sch.write(f"🏫 **{r_pc['school_name']}**")
+                    col_dev.write(f"🖥️ {r_pc['device_name']}")
+                    if col_btn.button("🔓 Buka Kunci / Hapus", key=f"super_del_pc_{r_pc['id']}"):
+                        supabase.table('perangkat_sekolah').delete().eq('id', r_pc['id']).execute()
+                        st.success(f"✅ Kunci PC '{r_pc['device_name']}' berhasil dibuka!")
+                        time.sleep(1)
+                        st.rerun()
+            else:
+                st.info("Tidak ada PC yang terdaftar pada sekolah yang dipilih.")
+        except Exception as e:
+            st.error(f"Gagal memuat data PC: {e}")
 
     with tab2:
         st.markdown("### 1. Tambah Pegawai (Manual)")
