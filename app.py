@@ -8,6 +8,7 @@ import pytz
 import base64
 import os
 import time
+import uuid  # <-- DITAMBAHKAN UNTUK GENERATE TOKEN PC
 import geopy.distance
 from streamlit_js_eval import get_geolocation
 import streamlit.components.v1 as components
@@ -52,7 +53,6 @@ def tampilkan_peringatan_csv():
         st.rerun()
 
 # --- 1.5. FUNGSI KRIPTOGRAFI KEAMANAN COOKIE & PASSWORD ---
-# PERBAIKAN: Menghapus fallback password default. Jika tidak ada di secrets, aplikasi akan error & menolak jalan.
 SECRET_KEY = os.environ.get("COOKIE_SECRET") or st.secrets.get("COOKIE_SECRET")
 SUPERADMIN_PASSWORD = os.environ.get("SUPERADMIN_PASSWORD") or st.secrets.get("SUPERADMIN_PASSWORD")
 
@@ -134,7 +134,6 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # --- 4. FUNGSI INTERAKSI DATABASE SUPABASE ---
-# PERBAIKAN: Menangkap log exception spesifik (print error)
 def get_data_sekolah():
     try:
         res = supabase.table('sekolah').select('*').execute()
@@ -277,7 +276,6 @@ if st.session_state.role is None:
         with st.expander("🛠️ Login Superadmin"):
             pwd_super = st.text_input("Password Superadmin:", type="password", key="pwd_super_main")
             if st.button("Masuk Superadmin", width="stretch", key="btn_super_main"):
-                # PERBAIKAN: Mengambil langsung dari environment tanpa fallback insecure
                 if pwd_super == SUPERADMIN_PASSWORD:
                     st.session_state.role = "Superadmin"
                     cookie_manager.set("auth_token", generate_signed_token("Superadmin"), key="set_token_login_super")
@@ -331,6 +329,33 @@ if st.session_state.role == "Pegawai":
                 st.error("Data sekolah untuk pegawai ini tidak ditemukan atau telah dihapus.")
                 st.stop()
                 
+            # --- START LOGIKA CEK HAK AKSES PERANGKAT DINAMIS (90+ PC) ---
+            curr_dev_cookie = cookie_manager.get("school_device_token")
+            
+            try:
+                res_dev_count = supabase.table('perangkat_sekolah').select('id').eq('school_name', sch_data['school_name']).execute()
+                total_terdaftar = len(res_dev_count.data) if res_dev_count.data else 0
+            except Exception as e:
+                total_terdaftar = 0
+
+            is_valid_pc = False
+            if total_terdaftar > 0:
+                try:
+                    res_valid = supabase.table('perangkat_sekolah').select('id').eq('school_name', sch_data['school_name']).eq('device_id', str(curr_dev_cookie)).execute()
+                    if res_valid.data:
+                        is_valid_pc = True
+                except Exception as e:
+                    pass
+                
+                if not is_valid_pc:
+                    st.error("⛔ AKSES DITOLAK! Perangkat ini belum terdaftar sebagai PC Resmi Sekolah. Silakan lapor ke Admin / Operator.")
+                    st.stop()
+                else:
+                    st.success("🖥️ Perangkat Terverifikasi: PC Resmi Sekolah.")
+            else:
+                st.warning("⚠️ Sekolah ini belum mendaftarkan PC Resmi. Presensi di perangkat apapun masih terbuka.")
+            # --- END LOGIKA CEK HAK AKSES PERANGKAT DINAMIS ---
+                
             st.info(f"👤 Nama: **{emp_data['name']}**\n\n🏫 Anda ditugaskan di: **{sch_data['school_name']}**")
             st.write("Lokasi sedang dideteksi secara otomatis. Mohon pastikan GPS aktif.")
             
@@ -369,7 +394,6 @@ if st.session_state.role == "Pegawai":
                             url_foto_harian = upload_ke_supabase(bytes_data, path_harian, "image/jpeg")
                             
                             if not is_cadar:
-                                # PERBAIKAN: JS menekan tombol Streamlit tersembunyi (Event Backend)
                                 html_code = f"""
                                 <!DOCTYPE html>
                                 <html>
@@ -398,7 +422,6 @@ if st.session_state.role == "Pegawai":
                                                     status.style.display = "none";
                                                     document.getElementById('kode').style.display = "inline-block";
                                                     
-                                                    // Klik tombol Streamlit tersembunyi untuk otorisasi Python Backend
                                                     try {{
                                                         const pTags = window.parent.document.querySelectorAll('p');
                                                         pTags.forEach(p => {{
@@ -421,7 +444,6 @@ if st.session_state.role == "Pegawai":
                                 if not st.session_state.wajah_terverifikasi:
                                     st.markdown("""
                                     <style>
-                                    /* CSS menyembunyikan tombol trigger wajah dari pandangan user */
                                     div.stButton > button:has(p:contains("V_E_R_I_F_I_E_D")) {
                                         opacity: 0;
                                         height: 1px;
@@ -434,7 +456,6 @@ if st.session_state.role == "Pegawai":
                                         st.session_state.wajah_terverifikasi = True
                                         st.rerun()
                                     
-                            # PERBAIKAN: Tombol Masuk/Pulang hanya muncul jika backend (Python) mengizinkan
                             if st.session_state.wajah_terverifikasi:
                                 col_masuk, col_pulang = st.columns(2)
                                 with col_masuk:
@@ -513,8 +534,53 @@ elif st.session_state.role == "Admin":
     
     st.session_state.schools = get_data_sekolah()
     admin_akses = st.session_state.get('admin_sekolah', 'Semua Sekolah')
+
+    # --- START LOGIKA PENDAFTARAN PC DINAMIS ADMIN ---
+    st.markdown("### 🖥️ 1. Kelola PC Absensi Sekolah (Mendukung 90+ PC)")
+    with st.expander("📌 Pendaftaran & Daftar PC"):
+        st.markdown("##### ➕ Daftarkan PC Ini")
+        st.info("Buka halaman ini di PC yang bersangkutan, lalu masukkan namanya dan klik daftarkan.")
+        nama_pc_input = st.text_input("Nama/Label PC (Cth: PC Lab Komputer 01)", key="inp_nama_pc_baru")
+        
+        if st.button("📌 Daftarkan PC Ini Ke Sistem", key="btn_register_pc_dynamic"):
+            if admin_akses == "Semua Sekolah":
+                st.error("Akun dengan akses 'Semua Sekolah' tidak bisa mendaftarkan PC. Silakan login sebagai Admin Sekolah spesifik.")
+            elif nama_pc_input.strip():
+                new_token = str(uuid.uuid4())
+                cookie_manager.set("school_device_token", new_token, key="set_pc_cookie_dyn")
+                
+                data_pc = {
+                    'school_name': admin_akses, 
+                    'device_id': new_token,
+                    'device_name': nama_pc_input.strip()
+                }
+                supabase.table('perangkat_sekolah').insert(data_pc).execute()
+                st.success(f"✅ PC '{nama_pc_input}' berhasil didaftarkan!")
+                time.sleep(1)
+                st.rerun()
+            else:
+                st.error("Masukkan nama/label PC terlebih dahulu.")
+
+        st.markdown("##### 📋 Daftar PC Terdaftar")
+        try:
+            res_pc = supabase.table('perangkat_sekolah').select('*').eq('school_name', admin_akses).execute()
+            if res_pc.data:
+                df_pc = pd.DataFrame(res_pc.data)
+                for idx, r_pc in df_pc.iterrows():
+                    col_a, col_b = st.columns([3, 1])
+                    col_a.write(f"🖥️ **{r_pc['device_name']}**")
+                    if col_b.button("🗑️ Hapus", key=f"del_pc_{r_pc['id']}"):
+                        supabase.table('perangkat_sekolah').delete().eq('id', r_pc['id']).execute()
+                        st.success("PC berhasil dihapus dari daftar terdaftar.")
+                        time.sleep(1)
+                        st.rerun()
+            else:
+                st.info("Belum ada PC yang terdaftar untuk sekolah ini.")
+        except Exception as e:
+            st.error("Gagal memuat data PC. Pastikan tabel perangkat_sekolah sudah dibuat di Supabase.")
+    # --- END LOGIKA PENDAFTARAN PC DINAMIS ADMIN ---
     
-    st.markdown("### 📸 1. Kelola Foto Acuan Pegawai")
+    st.markdown("### 📸 2. Kelola Foto Acuan Pegawai")
     
     col_f1, col_f2 = st.columns(2)
     with col_f1:
@@ -531,7 +597,6 @@ elif st.session_state.role == "Admin":
     if not search_query_foto.strip():
         st.info("💡 Silakan ketik NIP atau Nama pegawai pada kolom pencarian di atas untuk menampilkan data.")
     else:
-        # PERBAIKAN: Menggunakan filter ilike Supabase langsung
         try:
             query = supabase.table('pegawai').select('*')
             if sekolah_pilihan_foto != "Semua Sekolah":
@@ -594,7 +659,7 @@ elif st.session_state.role == "Admin":
                                     time.sleep(1)
                                     st.rerun()
 
-    st.markdown("### 2. Laporan & Rekap Absensi")
+    st.markdown("### 3. Laporan & Rekap Absensi")
     
     with st.form("form_filter_rekap"):
         col_tgl, col_sch = st.columns(2)
@@ -609,7 +674,6 @@ elif st.session_state.role == "Admin":
         
         btn_tampilkan = st.form_submit_button("📊 TAMPILKAN DATA", type="primary")
 
-    # Menyimpan status tombol agar tabel tidak hilang saat download excel
     if 'show_data_rekap' not in st.session_state:
         st.session_state.show_data_rekap = False
 
@@ -886,7 +950,6 @@ elif st.session_state.role == "Superadmin":
         if not search_query_edit.strip():
             st.info("💡 Silakan ketik NIP atau Nama pegawai pada kolom pencarian di atas untuk menampilkan data.")
         else:
-            # PERBAIKAN: Menggunakan filter ilike Supabase langsung
             try:
                 query_edit = supabase.table('pegawai').select('*')
                 if sekolah_pilihan_edit != "Semua Sekolah":
@@ -1108,7 +1171,6 @@ elif st.session_state.role == "Superadmin":
         if st.button("🚨 Reset Data Absensi Total", key="btn_super_reset_absen_total"):
             with st.spinner("Sedang menghapus data teks dan foto harian secara total..."):
                 try:
-                    # 1. Hapus file foto fisik dari Storage
                     res = supabase.table('absensi').select('foto_bukti').neq('foto_bukti', '').execute()
                     if res.data:
                         file_paths = []
@@ -1119,7 +1181,6 @@ elif st.session_state.role == "Superadmin":
                         if file_paths:
                             supabase.storage.from_("absensi-files").remove(file_paths)
                             
-                    # 2. Hapus total baris data dari tabel absensi
                     supabase.table('absensi').delete().neq('nip', '').execute()
                     st.success("✅ Data teks absensi DAN foto bukti harian berhasil dihapus total!")
                 except Exception as e:
@@ -1133,7 +1194,6 @@ elif st.session_state.role == "Superadmin":
         if st.button("🖼️ Reset Data Foto Saja (Teks Aman)", key="btn_super_reset_foto_saja"):
             with st.spinner("Sedang membersihkan foto fisik dari server... (Data teks aman)"):
                 try:
-                    # 1. Hapus file foto fisik dari Storage
                     res = supabase.table('absensi').select('foto_bukti').neq('foto_bukti', '').execute()
                     if res.data:
                         file_paths = []
@@ -1144,7 +1204,6 @@ elif st.session_state.role == "Superadmin":
                         if file_paths:
                             supabase.storage.from_("absensi-files").remove(file_paths)
                             
-                    # 2. HANYA KOSONGKAN link URL-nya saja, TAPI data baris teks tidak dihapus
                     supabase.table('absensi').update({'foto_bukti': ''}).neq('foto_bukti', '').execute()
                     st.success("✅ File foto harian berhasil dibersihkan! Data teks jam masuk/pulang tetap utuh dan aman.")
                 except Exception as e:
