@@ -795,144 +795,130 @@ elif st.session_state.role == "Admin":
                 key="dl_rekap_admin_excel"
             )
 st.write("---")
-        # ==========================================
-        # 4. REKAP ABSENSI BULANAN
-        # ==========================================
-        st.markdown("### 📊 4. Rekap Absensi Bulanan")
+    # ==========================================
+    # 4. REKAP ABSENSI BULANAN
+    # ==========================================
+    st.markdown("### 📊 4. Rekap Absensi Bulanan")
+    
+    col_rek1, col_rek2 = st.columns(2)
+    with col_rek1:
+        opsi_sch_rekap = ["-- Pilih Sekolah --"] + st.session_state.schools['school_name'].tolist()
+        filter_sch_rekap = st.selectbox("🏢 Pilih Sekolah (Untuk Rekap):", opsi_sch_rekap, key="flt_sch_rekap")
         
-        col_rek1, col_rek2 = st.columns(2)
-        with col_rek1:
-            opsi_sch_rekap = ["-- Pilih Sekolah --"] + st.session_state.schools['school_name'].tolist()
-            filter_sch_rekap = st.selectbox("🏢 Pilih Sekolah (Untuk Rekap):", opsi_sch_rekap, key="flt_sch_rekap")
-            
-        with col_rek2:
-            # Generate opsi bulan (12 bulan terakhir)
-            now_wita = datetime.datetime.now(pytz.timezone('Asia/Makassar'))
-            month_options = []
-            for i in range(12):
-                m = now_wita.month - i
-                y = now_wita.year
-                if m <= 0:
-                    m += 12
-                    y -= 1
-                month_options.append(f"{y}-{m:02d}")
-            filter_bln_rekap = st.selectbox("📅 Pilih Bulan:", month_options, key="flt_bln_rekap")
-            
-        if st.button("📈 Tampilkan Rekap Bulanan", type="primary", key="btn_rekap_bulanan"):
-            if filter_sch_rekap == "-- Pilih Sekolah --":
-                st.warning("⚠️ Harap pilih sekolah terlebih dahulu untuk menampilkan rekap.")
-            else:
-                with st.spinner(f"Menghitung kalkulasi rekap bulan {filter_bln_rekap} untuk {filter_sch_rekap}..."):
-                    try:
-                        # 1. Ambil data pegawai pada sekolah tersebut
-                        res_peg = supabase.table('pegawai').select('nip, name').eq('school_name', filter_sch_rekap).execute()
-                        pegawai_list = res_peg.data
-                        
-                        # 2. Ambil data absensi sekolah tersebut pada bulan yang dipilih
-                        res_abs = supabase.table('absensi').select('*').eq('sekolah', filter_sch_rekap).like('tanggal', f"{filter_bln_rekap}%").execute()
-                        absensi_list = res_abs.data
-                        
-                        if not pegawai_list:
-                            st.error("Tidak ada data pegawai yang terdaftar pada sekolah ini.")
-                        else:
-                            # 3. Siapkan template rekap untuk setiap pegawai
-                            rekap_data = {}
-                            for p in pegawai_list:
-                                rekap_data[p['nip']] = {
-                                    'NIP': str(p['nip']),
-                                    'NAMA': p['name'],
-                                    'MENIT TERLAMBAT': 0,
-                                    'MENIT CEPAT PULANG': 0,
-                                    'JUMLAH KEHADIRAN': 0,
-                                    'TANPA KETERANGAN': 0,
-                                    'SAKIT': 0,
-                                    'DINAS LUAR': 0,
-                                    '_tdk_lengkap_hari': 0 # Kolom sementara
-                                }
-                                
-                            # 4. Susun ulang data absensi berdasarkan NIP dan Tanggal
-                            abs_dict = {}
-                            for a in absensi_list:
-                                nip = str(a['nip'])
-                                tgl = a['tanggal']
-                                if nip not in abs_dict:
-                                    abs_dict[nip] = {}
-                                if tgl not in abs_dict[nip]:
-                                    abs_dict[nip][tgl] = []
-                                abs_dict[nip][tgl].append(a)
-                                
-                            # PENGATURAN JAM STANDAR (Ubah sesuai aturan sekolah Anda)
-                            jam_masuk_std = datetime.time(7, 30)  # Maksimal Masuk 07:30
-                            jam_pulang_std = datetime.time(15, 0) # Minimal Pulang 15:00
+    with col_rek2:
+        now_wita = datetime.datetime.now(pytz.timezone('Asia/Makassar'))
+        month_options = []
+        for i in range(12):
+            m = now_wita.month - i
+            y = now_wita.year
+            if m <= 0:
+                m += 12
+                y -= 1
+            month_options.append(f"{y}-{m:02d}")
+        filter_bln_rekap = st.selectbox("📅 Pilih Bulan:", month_options, key="flt_bln_rekap")
+        
+    if st.button("📈 Tampilkan Rekap Bulanan", type="primary", key="btn_rekap_bulanan"):
+        if filter_sch_rekap == "-- Pilih Sekolah --":
+            st.warning("⚠️ Harap pilih sekolah terlebih dahulu untuk menampilkan rekap.")
+        else:
+            with st.spinner(f"Menghitung kalkulasi rekap bulan {filter_bln_rekap} untuk {filter_sch_rekap}..."):
+                try:
+                    res_peg = supabase.table('pegawai').select('nip, name').eq('school_name', filter_sch_rekap).execute()
+                    pegawai_list = res_peg.data
+                    
+                    res_abs = supabase.table('absensi').select('*').eq('sekolah', filter_sch_rekap).like('tanggal', f"{filter_bln_rekap}%").execute()
+                    absensi_list = res_abs.data
+                    
+                    if not pegawai_list:
+                        st.error("Tidak ada data pegawai yang terdaftar pada sekolah ini.")
+                    else:
+                        rekap_data = {}
+                        for p in pegawai_list:
+                            rekap_data[p['nip']] = {
+                                'NIP': str(p['nip']),
+                                'NAMA': p['name'],
+                                'MENIT TERLAMBAT': 0,
+                                'MENIT CEPAT PULANG': 0,
+                                'JUMLAH KEHADIRAN': 0,
+                                'TANPA KETERANGAN': 0,
+                                'SAKIT': 0,
+                                'DINAS LUAR': 0,
+                                '_tdk_lengkap_hari': 0
+                            }
                             
-                            # 5. Proses Kalkulasi
-                            for nip, tgl_data in abs_dict.items():
-                                if nip not in rekap_data:
-                                    continue # Lewati jika NIP tidak ada di list pegawai aktif
-                                    
-                                for tgl, records in tgl_data.items():
-                                    status_hari_ini = [r['status'] for r in records]
-                                    
-                                    # Cek status spesifik
-                                    if 'Sakit' in status_hari_ini:
-                                        rekap_data[nip]['SAKIT'] += 1
-                                    elif 'Dinas Luar' in status_hari_ini:
-                                        rekap_data[nip]['DINAS LUAR'] += 1
-                                    elif 'Tanpa Keterangan' in status_hari_ini or 'Alpha' in status_hari_ini:
-                                        rekap_data[nip]['TANPA KETERANGAN'] += 1
-                                    elif 'Izin' in status_hari_ini or 'Cuti' in status_hari_ini:
-                                        pass # Tidak masuk hitungan kehadiran, sakit, dinas, atau tanpa keterangan
-                                    else:
-                                        # Cek kelengkapan absensi (Masuk & Pulang)
-                                        has_masuk = 'Masuk' in status_hari_ini
-                                        has_pulang = 'Pulang' in status_hari_ini
-                                        
-                                        if has_masuk and has_pulang:
-                                            # Dihitung 1 kehadiran utuh
-                                            rekap_data[nip]['JUMLAH KEHADIRAN'] += 1
-                                            
-                                            # Kalkulasi menit terlambat & cepat pulang
-                                            for r in records:
-                                                if r['status'] == 'Masuk' and r.get('jam') and r['jam'] != '-':
-                                                    try:
-                                                        jam_absen = datetime.datetime.strptime(r['jam'], '%H:%M:%S').time()
-                                                        if jam_absen > jam_masuk_std:
-                                                            td_absen = datetime.timedelta(hours=jam_absen.hour, minutes=jam_absen.minute, seconds=jam_absen.second)
-                                                            td_std = datetime.timedelta(hours=jam_masuk_std.hour, minutes=jam_masuk_std.minute, seconds=jam_masuk_std.second)
-                                                            diff = td_absen - td_std
-                                                            rekap_data[nip]['MENIT TERLAMBAT'] += int(diff.total_seconds() / 60)
-                                                    except:
-                                                        pass
-                                                        
-                                                elif r['status'] == 'Pulang' and r.get('jam') and r['jam'] != '-':
-                                                    try:
-                                                        jam_absen = datetime.datetime.strptime(r['jam'], '%H:%M:%S').time()
-                                                        if jam_absen < jam_pulang_std:
-                                                            td_absen = datetime.timedelta(hours=jam_absen.hour, minutes=jam_absen.minute, seconds=jam_absen.second)
-                                                            td_std = datetime.timedelta(hours=jam_pulang_std.hour, minutes=jam_pulang_std.minute, seconds=jam_pulang_std.second)
-                                                            diff = td_std - td_absen
-                                                            rekap_data[nip]['MENIT CEPAT PULANG'] += int(diff.total_seconds() / 60)
-                                                    except:
-                                                        pass
-                                        elif has_masuk or has_pulang:
-                                            # Jika hanya masuk atau hanya pulang
-                                            rekap_data[nip]['_tdk_lengkap_hari'] += 1
-                                            
-                            # 6. Finalisasi kolom KETERANGAN dan bersihkan kolom sementara
-                            for nip, data in rekap_data.items():
-                                if data['_tdk_lengkap_hari'] > 0:
-                                    data['KETERANGAN'] = f"Tdk lengkap absen ({data['_tdk_lengkap_hari']}x)"
+                        abs_dict = {}
+                        for a in absensi_list:
+                            nip = str(a['nip'])
+                            tgl = a['tanggal']
+                            if nip not in abs_dict:
+                                abs_dict[nip] = {}
+                            if tgl not in abs_dict[nip]:
+                                abs_dict[nip][tgl] = []
+                            abs_dict[nip][tgl].append(a)
+                            
+                        jam_masuk_std = datetime.time(7, 30)
+                        jam_pulang_std = datetime.time(15, 0)
+                        
+                        for nip, tgl_data in abs_dict.items():
+                            if nip not in rekap_data:
+                                continue
+                                
+                            for tgl, records in tgl_data.items():
+                                status_hari_ini = [r['status'] for r in records]
+                                
+                                if 'Sakit' in status_hari_ini:
+                                    rekap_data[nip]['SAKIT'] += 1
+                                elif 'Dinas Luar' in status_hari_ini:
+                                    rekap_data[nip]['DINAS LUAR'] += 1
+                                elif 'Tanpa Keterangan' in status_hari_ini or 'Alpha' in status_hari_ini:
+                                    rekap_data[nip]['TANPA KETERANGAN'] += 1
+                                elif 'Izin' in status_hari_ini or 'Cuti' in status_hari_ini:
+                                    pass
                                 else:
-                                    data['KETERANGAN'] = ""
-                                del data['_tdk_lengkap_hari']
-                                
-                            # 7. Tampilkan ke dalam Tabel
-                            df_rekap = pd.DataFrame(list(rekap_data.values()))
-                            st.success(f"Berhasil memuat rekap absensi untuk {len(df_rekap)} pegawai.")
-                            st.dataframe(df_rekap, use_container_width=True, hide_index=True)
+                                    has_masuk = 'Masuk' in status_hari_ini
+                                    has_pulang = 'Pulang' in status_hari_ini
+                                    
+                                    if has_masuk and has_pulang:
+                                        rekap_data[nip]['JUMLAH KEHADIRAN'] += 1
+                                        
+                                        for r in records:
+                                            if r['status'] == 'Masuk' and r.get('jam') and r['jam'] != '-':
+                                                try:
+                                                    jam_absen = datetime.datetime.strptime(r['jam'], '%H:%M:%S').time()
+                                                    if jam_absen > jam_masuk_std:
+                                                        td_absen = datetime.timedelta(hours=jam_absen.hour, minutes=jam_absen.minute, seconds=jam_absen.second)
+                                                        td_std = datetime.timedelta(hours=jam_masuk_std.hour, minutes=jam_masuk_std.minute, seconds=jam_masuk_std.second)
+                                                        diff = td_absen - td_std
+                                                        rekap_data[nip]['MENIT TERLAMBAT'] += int(diff.total_seconds() / 60)
+                                                except:
+                                                    pass
+                                                    
+                                            elif r['status'] == 'Pulang' and r.get('jam') and r['jam'] != '-':
+                                                try:
+                                                    jam_absen = datetime.datetime.strptime(r['jam'], '%H:%M:%S').time()
+                                                    if jam_absen < jam_pulang_std:
+                                                        td_absen = datetime.timedelta(hours=jam_absen.hour, minutes=jam_absen.minute, seconds=jam_absen.second)
+                                                        td_std = datetime.timedelta(hours=jam_pulang_std.hour, minutes=jam_pulang_std.minute, seconds=jam_pulang_std.second)
+                                                        diff = td_std - td_absen
+                                                        rekap_data[nip]['MENIT CEPAT PULANG'] += int(diff.total_seconds() / 60)
+                                                except:
+                                                    pass
+                                    elif has_masuk or has_pulang:
+                                        rekap_data[nip]['_tdk_lengkap_hari'] += 1
+                                        
+                        for nip, data in rekap_data.items():
+                            if data['_tdk_lengkap_hari'] > 0:
+                                data['KETERANGAN'] = f"Tdk lengkap absen ({data['_tdk_lengkap_hari']}x)"
+                            else:
+                                data['KETERANGAN'] = ""
+                            del data['_tdk_lengkap_hari']
                             
-                    except Exception as e:
-                        st.error(f"Terjadi kesalahan saat memproses rekap data: {e}")
+                        df_rekap = pd.DataFrame(list(rekap_data.values()))
+                        st.success(f"Berhasil memuat rekap absensi untuk {len(df_rekap)} pegawai.")
+                        st.dataframe(df_rekap, use_container_width=True, hide_index=True)
+                        
+                except Exception as e:
+                    st.error(f"Terjadi kesalahan saat memproses rekap data: {e}")
                         
 # ==========================================
 # HAK AKSES 3: SUPERADMIN
