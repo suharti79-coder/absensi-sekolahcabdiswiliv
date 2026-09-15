@@ -870,8 +870,8 @@ elif st.session_state.role == "Admin":
                         hari_aktif = []
                         for d in range(1, last_day + 1):
                             tgl_cek = datetime.date(y, m, d)
-                            # Hanya hitung jika belum melewati hari ini DAN bukan hari Minggu (index 6)
-                            if tgl_cek <= now_date and tgl_cek.weekday() != 6:
+                            # Hanya hitung jika belum melewati hari ini DAN hanya Senin - Jumat (index 0 - 4)
+                            if tgl_cek <= now_date and tgl_cek.weekday() < 5:
                                 hari_aktif.append(tgl_cek.strftime('%Y-%m-%d'))
                                 
                         # 2. Proses rekap dengan mengecek SETIAP PEGAWAI di SETIAP HARI AKTIF
