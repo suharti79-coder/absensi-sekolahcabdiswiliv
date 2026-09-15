@@ -1140,53 +1140,61 @@ elif st.session_state.role == "Superadmin":
     with tab4:
         st.markdown("### 📝 Input Keterangan Absensi (Manual)")
         
-        if st.session_state.employees.empty:
-            st.warning("Belum ada data pegawai.")
-        else:
-            with st.form("form_izin"):
-                pilihan_pegawai = st.selectbox("Pilih Pegawai:", st.session_state.employees['name'].tolist(), key="sel_peg_izin")
-                jenis_absen = st.selectbox("Status Kehadiran:", ["Sakit", "Izin", "Cuti", "Dinas Luar"], key="sel_jenis_izin")
+        with st.form("form_izin"):
+            nip_input_izin = st.text_input("Input NIP Pegawai:", placeholder="Masukkan NIP pegawai...", key="inp_nip_izin")
+            jenis_absen = st.selectbox("Status Kehadiran:", ["Sakit", "Izin", "Cuti", "Dinas Luar"], key="sel_jenis_izin")
+            
+            col_tgl1, col_tgl2 = st.columns(2)
+            with col_tgl1:
+                tanggal_mulai = st.date_input("Dari Tanggal", key="tgl_mulai_izin")
+            with col_tgl2:
+                tanggal_selesai = st.date_input("Sampai Tanggal", key="tgl_selesai_izin")
                 
-                col_tgl1, col_tgl2 = st.columns(2)
-                with col_tgl1:
-                    tanggal_mulai = st.date_input("Dari Tanggal", key="tgl_mulai_izin")
-                with col_tgl2:
-                    tanggal_selesai = st.date_input("Sampai Tanggal", key="tgl_selesai_izin")
-                    
-                file_surat = st.file_uploader("Upload Bukti Surat (PDF/JPG/PNG)", type=['pdf', 'jpg', 'jpeg', 'png'], key="uploader_surat_izin")
-                
-                if st.form_submit_button("Simpan Data Absensi", key="btn_sub_izin"):
-                    if tanggal_selesai < tanggal_mulai:
-                        st.error("Error: 'Sampai Tanggal' tidak boleh lebih awal dari 'Dari Tanggal'.")
-                    elif file_surat is not None:
-                        emp_data = st.session_state.employees[st.session_state.employees['name'] == pilihan_pegawai].iloc[0]
-                        file_ext = file_surat.name.split('.')[-1]
-                        file_name = f"{emp_data['nip']}_{jenis_absen}_{tanggal_mulai.strftime('%Y%m%d')}_sd_{tanggal_selesai.strftime('%Y%m%d')}.{file_ext}"
-                        
-                        path_simpan = f"surat_izin/{file_name}"
-                        url_surat = upload_ke_supabase(file_surat.getvalue(), path_simpan, file_surat.type)
-                        
-                        if url_surat:
-                            delta = tanggal_selesai - tanggal_mulai
-                            daftar_tanggal = [tanggal_mulai + datetime.timedelta(days=i) for i in range(delta.days + 1)]
+            file_surat = st.file_uploader("Upload Bukti Surat (PDF/JPG/PNG)", type=['pdf', 'jpg', 'jpeg', 'png'], key="uploader_surat_izin")
+            
+            if st.form_submit_button("Simpan Data Absensi", key="btn_sub_izin"):
+                nip_bersih = nip_input_izin.strip()
+                if not nip_bersih:
+                    st.error("Error: NIP Pegawai wajib diisi.")
+                elif tanggal_selesai < tanggal_mulai:
+                    st.error("Error: 'Sampai Tanggal' tidak boleh lebih awal dari 'Dari Tanggal'.")
+                elif file_surat is None:
+                    st.error("Harap unggah file bukti surat terlebih dahulu sebelum menyimpan.")
+                else:
+                    try:
+                        # Mengambil data pegawai spesifik dari Supabase berdasarkan NIP (Sangat ringan & cepat)
+                        res_emp = supabase.table('pegawai').select('*').eq('nip', nip_bersih).execute()
+                        if not res_emp.data:
+                            st.error(f"⚠️ Data pegawai dengan NIP '{nip_bersih}' tidak ditemukan di database.")
+                        else:
+                            emp_data = res_emp.data[0]
+                            file_ext = file_surat.name.split('.')[-1]
+                            file_name = f"{emp_data['nip']}_{jenis_absen}_{tanggal_mulai.strftime('%Y%m%d')}_sd_{tanggal_selesai.strftime('%Y%m%d')}.{file_ext}"
                             
-                            list_absen = []
-                            for tgl in daftar_tanggal:
-                                list_absen.append({
-                                    'nip': str(emp_data['nip']), 
-                                    'nama': emp_data['name'], 
-                                    'sekolah': emp_data['school_name'],
-                                    'tanggal': tgl.strftime('%Y-%m-%d'), 
-                                    'jam': '-',
-                                    'jarak_m': url_surat, 
-                                    'status': jenis_absen,
-                                    'foto_bukti': ''
-                                })
+                            path_simpan = f"surat_izin/{file_name}"
+                            url_surat = upload_ke_supabase(file_surat.getvalue(), path_simpan, file_surat.type)
+                            
+                            if url_surat:
+                                delta = tanggal_selesai - tanggal_mulai
+                                daftar_tanggal = [tanggal_mulai + datetime.timedelta(days=i) for i in range(delta.days + 1)]
                                 
-                            supabase.table('absensi').insert(list_absen).execute()
-                            st.success(f"Berhasil! Absensi {jenis_absen} untuk {pilihan_pegawai} dari {tanggal_mulai.strftime('%d-%m-%Y')} s/d {tanggal_selesai.strftime('%d-%m-%Y')} telah tercatat.")
-                    else:
-                        st.error("Harap unggah file bukti surat terlebih dahulu sebelum menyimpan.")
+                                list_absen = []
+                                for tgl in daftar_tanggal:
+                                    list_absen.append({
+                                        'nip': str(emp_data['nip']), 
+                                        'nama': emp_data['name'], 
+                                        'sekolah': emp_data['school_name'],
+                                        'tanggal': tgl.strftime('%Y-%m-%d'), 
+                                        'jam': '-',
+                                        'jarak_m': url_surat, 
+                                        'status': jenis_absen,
+                                        'foto_bukti': ''
+                                    })
+                                    
+                                supabase.table('absensi').insert(list_absen).execute()
+                                st.success(f"Berhasil! Absensi {jenis_absen} untuk {emp_data['name']} (NIP: {emp_data['nip']}) dari {tanggal_mulai.strftime('%d-%m-%Y')} s/d {tanggal_selesai.strftime('%d-%m-%Y')} telah tercatat.")
+                    except Exception as e:
+                        st.error(f"Terjadi kesalahan saat memproses data: {e}")
                         
     with tab5:
         st.markdown("### 🚨 Reset Data Sistem")
