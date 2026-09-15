@@ -857,27 +857,75 @@ elif st.session_state.role == "Admin":
                                 abs_dict[nip][tgl] = []
                             abs_dict[nip][tgl].append(a)
                             
+                        import calendar
                         jam_masuk_std = datetime.time(7, 30)
                         jam_pulang_std = datetime.time(15, 0)
                         
-                        for nip, tgl_data in abs_dict.items():
-                            if nip not in rekap_data:
-                                continue
+                        # --- MULAI PERBAIKAN LOGIKA REKAP ---
+                        y, m = map(int, filter_bln_rekap.split('-'))
+                        now_date = datetime.datetime.now(pytz.timezone('Asia/Makassar')).date()
+                        _, last_day = calendar.monthrange(y, m)
+                        
+                        # 1. Buat daftar hari efektif (batas maksimal sampai hari ini)
+                        hari_aktif = []
+                        for d in range(1, last_day + 1):
+                            tgl_cek = datetime.date(y, m, d)
+                            # Hanya hitung jika belum melewati hari ini DAN bukan hari Minggu (index 6)
+                            if tgl_cek <= now_date and tgl_cek.weekday() != 6:
+                                hari_aktif.append(tgl_cek.strftime('%Y-%m-%d'))
                                 
-                            for tgl, records in tgl_data.items():
-                                status_hari_ini = [r['status'] for r in records]
-                                
-                                if 'Sakit' in status_hari_ini:
-                                    rekap_data[nip]['SAKIT'] += 1
-                                elif 'Dinas Luar' in status_hari_ini:
-                                    rekap_data[nip]['DINAS LUAR'] += 1
-                                elif 'Tanpa Keterangan' in status_hari_ini or 'Alpha' in status_hari_ini:
-                                    rekap_data[nip]['TANPA KETERANGAN'] += 1
-                                elif 'Izin' in status_hari_ini or 'Cuti' in status_hari_ini:
-                                    pass
+                        # 2. Proses rekap dengan mengecek SETIAP PEGAWAI di SETIAP HARI AKTIF
+                        for nip, data in rekap_data.items():
+                            tgl_data = abs_dict.get(nip, {})
+                            
+                            for tgl in hari_aktif:
+                                if tgl in tgl_data:
+                                    records = tgl_data[tgl]
+                                    status_hari_ini = [r['status'] for r in records]
+                                    
+                                    if 'Sakit' in status_hari_ini:
+                                        data['SAKIT'] += 1
+                                    elif 'Dinas Luar' in status_hari_ini:
+                                        data['DINAS LUAR'] += 1
+                                    elif 'Tanpa Keterangan' in status_hari_ini or 'Alpha' in status_hari_ini:
+                                        data['TANPA KETERANGAN'] += 1
+                                    elif 'Izin' in status_hari_ini or 'Cuti' in status_hari_ini:
+                                        pass
+                                    else:
+                                        has_masuk = 'Masuk' in status_hari_ini
+                                        has_pulang = 'Pulang' in status_hari_ini
+                                        
+                                        if has_masuk and has_pulang:
+                                            data['JUMLAH KEHADIRAN'] += 1
+                                            
+                                            for r in records:
+                                                if r['status'] == 'Masuk' and r.get('jam') and r['jam'] != '-':
+                                                    try:
+                                                        jam_absen = datetime.datetime.strptime(r['jam'], '%H:%M:%S').time()
+                                                        if jam_absen > jam_masuk_std:
+                                                            td_absen = datetime.timedelta(hours=jam_absen.hour, minutes=jam_absen.minute, seconds=jam_absen.second)
+                                                            td_std = datetime.timedelta(hours=jam_masuk_std.hour, minutes=jam_masuk_std.minute, seconds=jam_masuk_std.second)
+                                                            diff = td_absen - td_std
+                                                            data['MENIT TERLAMBAT'] += int(diff.total_seconds() / 60)
+                                                    except:
+                                                        pass
+                                                        
+                                                elif r['status'] == 'Pulang' and r.get('jam') and r['jam'] != '-':
+                                                    try:
+                                                        jam_absen = datetime.datetime.strptime(r['jam'], '%H:%M:%S').time()
+                                                        if jam_absen < jam_pulang_std:
+                                                            td_absen = datetime.timedelta(hours=jam_absen.hour, minutes=jam_absen.minute, seconds=jam_absen.second)
+                                                            td_std = datetime.timedelta(hours=jam_pulang_std.hour, minutes=jam_pulang_std.minute, seconds=jam_pulang_std.second)
+                                                            diff = td_std - td_absen
+                                                            data['MENIT CEPAT PULANG'] += int(diff.total_seconds() / 60)
+                                                    except:
+                                                        pass
+                                        elif has_masuk or has_pulang:
+                                            data['_tdk_lengkap_hari'] += 1
                                 else:
-                                    has_masuk = 'Masuk' in status_hari_ini
-                                    has_pulang = 'Pulang' in status_hari_ini
+                                    # JIKA TIDAK ADA DATA ABSEN SAMA SEKALI DI TANGGAL INI
+                                    data['TANPA KETERANGAN'] += 1
+                        # --- AKHIR PERBAIKAN LOGIKA REKAP ---
                                     
                                     if has_masuk and has_pulang:
                                         rekap_data[nip]['JUMLAH KEHADIRAN'] += 1
