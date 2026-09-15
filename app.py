@@ -926,34 +926,6 @@ elif st.session_state.role == "Admin":
                                     # JIKA TIDAK ADA DATA ABSEN SAMA SEKALI DI TANGGAL INI
                                     data['TANPA KETERANGAN'] += 1
                         # --- AKHIR PERBAIKAN LOGIKA REKAP ---
-                                    
-                                    if has_masuk and has_pulang:
-                                        rekap_data[nip]['JUMLAH KEHADIRAN'] += 1
-                                        
-                                        for r in records:
-                                            if r['status'] == 'Masuk' and r.get('jam') and r['jam'] != '-':
-                                                try:
-                                                    jam_absen = datetime.datetime.strptime(r['jam'], '%H:%M:%S').time()
-                                                    if jam_absen > jam_masuk_std:
-                                                        td_absen = datetime.timedelta(hours=jam_absen.hour, minutes=jam_absen.minute, seconds=jam_absen.second)
-                                                        td_std = datetime.timedelta(hours=jam_masuk_std.hour, minutes=jam_masuk_std.minute, seconds=jam_masuk_std.second)
-                                                        diff = td_absen - td_std
-                                                        rekap_data[nip]['MENIT TERLAMBAT'] += int(diff.total_seconds() / 60)
-                                                except:
-                                                    pass
-                                                    
-                                            elif r['status'] == 'Pulang' and r.get('jam') and r['jam'] != '-':
-                                                try:
-                                                    jam_absen = datetime.datetime.strptime(r['jam'], '%H:%M:%S').time()
-                                                    if jam_absen < jam_pulang_std:
-                                                        td_absen = datetime.timedelta(hours=jam_absen.hour, minutes=jam_absen.minute, seconds=jam_absen.second)
-                                                        td_std = datetime.timedelta(hours=jam_pulang_std.hour, minutes=jam_pulang_std.minute, seconds=jam_pulang_std.second)
-                                                        diff = td_std - td_absen
-                                                        rekap_data[nip]['MENIT CEPAT PULANG'] += int(diff.total_seconds() / 60)
-                                                except:
-                                                    pass
-                                    elif has_masuk or has_pulang:
-                                        rekap_data[nip]['_tdk_lengkap_hari'] += 1
                                         
                         for nip, data in rekap_data.items():
                             if data['_tdk_lengkap_hari'] > 0:
