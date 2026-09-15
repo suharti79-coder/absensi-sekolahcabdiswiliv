@@ -1084,7 +1084,7 @@ elif st.session_state.role == "Superadmin":
                     else:
                         st.error("Harap unggah file bukti surat terlebih dahulu sebelum menyimpan.")
                         
-   with tab5:
+    with tab5:
         st.markdown("### Reset Data Sistem")
         st.warning("Perhatian! Menghapus data di sini tidak dapat dikembalikan AJJA MAKECCA LANDRE LIMAMMU.")
         col1, col2 = st.columns(2)
