@@ -536,7 +536,7 @@ elif st.session_state.role == "Admin":
     admin_akses = st.session_state.get('admin_sekolah', 'Semua Sekolah')
 
     # --- START LOGIKA PENDAFTARAN PC DINAMIS ADMIN ---
-    st.markdown("### 🖥️ 1. Kelola PC Absensi Sekolah (Mendukung 90+ PC)")
+    st.markdown("### 🖥️ 1. Kelola PC Absensi Sekolah")
     with st.expander("📌 Pendaftaran & Daftar PC"):
         st.markdown("##### ➕ Daftarkan PC Ini")
         st.info("Buka halaman ini di PC yang bersangkutan, lalu masukkan namanya dan klik daftarkan.")
@@ -659,7 +659,7 @@ elif st.session_state.role == "Admin":
                                     time.sleep(1)
                                     st.rerun()
 
-    st.markdown("### 3. Laporan & Rekap Absensi")
+    st.markdown("### 3. Laporan & Rekap Harian Absensi")
     
     with st.form("form_filter_rekap"):
         col_tgl, col_sch = st.columns(2)
