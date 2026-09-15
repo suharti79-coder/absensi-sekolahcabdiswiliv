@@ -917,6 +917,22 @@ elif st.session_state.role == "Admin":
                         df_rekap = pd.DataFrame(list(rekap_data.values()))
                         st.success(f"Berhasil memuat rekap absensi untuk {len(df_rekap)} pegawai.")
                         st.dataframe(df_rekap, use_container_width=True, hide_index=True)
+
+                        # ==========================================
+                        # TAMBAHAN: Tombol Download ke Excel
+                        # ==========================================
+                        buffer = io.BytesIO()
+                        # Menggunakan engine xlsxwriter (biasanya sudah bawaan pandas/streamlit)
+                        with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
+                            df_rekap.to_excel(writer, sheet_name='Rekap_Bulanan', index=False)
+                        
+                        st.download_button(
+                            label="📥 Download Rekap (Excel)",
+                            data=buffer.getvalue(),
+                            file_name=f"Rekap_Absensi_{filter_sch_rekap}_{filter_bln_rekap}.xlsx",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            use_container_width=True
+                        )
                         
                 except Exception as e:
                     st.error(f"Terjadi kesalahan saat memproses rekap data: {e}")
