@@ -850,6 +850,7 @@ elif st.session_state.role == "Admin":
                                 'TANPA KETERANGAN': 0,
                                 'SAKIT': 0,
                                 'DINAS LUAR': 0,
+                                'CUTI': 0,
                                 '_tdk_lengkap_hari': 0
                             }
                             
@@ -904,7 +905,8 @@ elif st.session_state.role == "Admin":
                                         data['DINAS LUAR'] += 1
                                     elif any('tanpa keterangan' in s.lower() or 'alpha' in s.lower() for s in statuses):
                                         data['TANPA KETERANGAN'] += 1
-                                    elif any('izin' in s.lower() or 'cuti' in s.lower() for s in statuses):
+                                    elif any('cuti' in s.lower() or 'cuti' in s.lower() for s in statuses):
+                                        data['CUTI'] += 1
                                         pass
                                     else:
                                         has_masuk = any('masuk' in s.lower() for s in statuses)
