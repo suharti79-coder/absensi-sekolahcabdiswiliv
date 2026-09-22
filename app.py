@@ -1,16 +1,30 @@
+# ==========================================
+# BAGIAN IMPORT (Telah Dirapikan)
+# ==========================================
+import os
 import io
+import time
+import uuid
 import hmac
 import hashlib
 import calendar
 import datetime
-import pytz
 import base64
-import os
-import time
-import uuid
+import pytz
+
+import pandas as pd
+import streamlit as st
+import streamlit.components.v1 as components
+import extra_streamlit_components as stx
 import geopy.distance
 from PIL import Image
+from streamlit_js_eval import get_geolocation
+from dotenv import load_dotenv
+from supabase import create_client, Client
 
+# ==========================================
+# FUNGSI UTILITAS AWAL
+# ==========================================
 def kompres_foto(image_bytes, quality=60, max_size=(800, 800)):
     """Fungsi untuk mengecilkan resolusi dan ukuran file gambar"""
     try:
@@ -29,13 +43,6 @@ def kompres_foto(image_bytes, quality=60, max_size=(800, 800)):
     except Exception as e:
         print(f"Gagal kompresi: {e}")
         return image_bytes # Kembalikan file asli jika error
-import streamlit as st
-import pandas as pd
-from streamlit_js_eval import get_geolocation
-import streamlit.components.v1 as components
-import extra_streamlit_components as stx
-from dotenv import load_dotenv
-from supabase import create_client, Client
 
 # --- 1. MEMUAT ENVIRONMENT VARIABLES & SUPABASE ---
 load_dotenv()
@@ -200,20 +207,23 @@ def get_data_pengaturan():
         return pd.DataFrame([{'batas_masuk': '07:30', 'batas_pulang': '16:00'}])
 
 # --- 5. INISIALISASI SESSION STATE ---
+default_states = {
+    'role': None,
+    'admin_sekolah': "Semua Sekolah",
+    'logout_triggered': False,
+    'wajah_terverifikasi': False
+}
+
+for key_state, val in default_states.items():
+    if key_state not in st.session_state:
+        st.session_state[key_state] = val
+
 if 'schools' not in st.session_state:
     st.session_state.schools = get_data_sekolah()
 if 'employees' not in st.session_state:
     st.session_state.employees = get_data_pegawai()
 if 'settings' not in st.session_state:
     st.session_state.settings = get_data_pengaturan()
-if 'role' not in st.session_state:
-    st.session_state.role = None
-if 'admin_sekolah' not in st.session_state:
-    st.session_state.admin_sekolah = "Semua Sekolah"
-if 'logout_triggered' not in st.session_state:
-    st.session_state.logout_triggered = False
-if 'wajah_terverifikasi' not in st.session_state:
-    st.session_state.wajah_terverifikasi = False
 
 raw_token = cookie_manager.get("auth_token")
 saved_admin_school = cookie_manager.get("admin_sekolah")
@@ -329,7 +339,6 @@ if st.session_state.role == "Pegawai":
     st.button("⬅️ Kembali ke Halaman Awal", on_click=logout, key="btn_back_pegawai")
     st.title("📍 Presensi GPS & Wajah")
     
-    st.session_state.schools = get_data_sekolah()
     nip_input = st.text_input("SILAHKAN KETIK NIP:", placeholder="Contoh: 198001012005011001", key="nip_input_pegawai")
     
     if nip_input.strip():
@@ -509,7 +518,6 @@ if st.session_state.role == "Pegawai":
                                         st.warning(f"⚠️ Anda sudah melakukan absensi **{jenis_aksi}** untuk hari ini ({tgl_sekarang})!")
                                     else:
                                         jam_sekarang = now.time()
-                                        st.session_state.settings = get_data_pengaturan()
                                         
                                         batas_masuk_str = st.session_state.settings['batas_masuk'].iloc[0]
                                         batas_pulang_str = st.session_state.settings['batas_pulang'].iloc[0]
@@ -556,7 +564,6 @@ elif st.session_state.role == "Admin":
     with col_tombol:
         st.button("🚪 Logout", on_click=logout, use_container_width=True, key="btn_logout_top_admin")
     
-    st.session_state.schools = get_data_sekolah()
     admin_akses = st.session_state.get('admin_sekolah', 'Semua Sekolah')
 
     # --- 1. KELOLA PC ABSENSI SEKOLAH ---
@@ -1006,9 +1013,6 @@ elif st.session_state.role == "Superadmin":
         st.title("🛠️ Dashboard Superadmin")
     with col_tombol:
         st.button("🚪 Logout", on_click=logout, use_container_width=True, key="btn_logout_top_super")
-    
-    st.session_state.schools = get_data_sekolah()
-    st.session_state.settings = get_data_pengaturan()
     
     tab1, tab_pc, tab2, tab3, tab4, tab5, tab6 = st.tabs([
         "🏛️ Kelola Sekolah", 
