@@ -9,7 +9,26 @@ import os
 import time
 import uuid
 import geopy.distance
+from PIL import Image
 
+def kompres_foto(image_bytes, quality=60, max_size=(800, 800)):
+    """Fungsi untuk mengecilkan resolusi dan ukuran file gambar"""
+    try:
+        img = Image.open(io.BytesIO(image_bytes))
+        # Konversi ke RGB jika formatnya PNG/transparan agar bisa jadi JPEG
+        if img.mode in ("RGBA", "P"):
+            img = img.convert("RGB")
+        
+        # Perkecil dimensi gambar (maksimal 800x800 pixel)
+        img.thumbnail(max_size)
+        
+        # Simpan kembali ke dalam memory (BytesIO) dengan format JPEG
+        output = io.BytesIO()
+        img.save(output, format="JPEG", quality=quality, optimize=True)
+        return output.getvalue()
+    except Exception as e:
+        print(f"Gagal kompresi: {e}")
+        return image_bytes # Kembalikan file asli jika error
 import streamlit as st
 import pandas as pd
 from streamlit_js_eval import get_geolocation
@@ -388,7 +407,10 @@ if st.session_state.role == "Pegawai":
                             st.info("🧕 **Akun Terotorisasi:** Verifikasi biometrik dilewati. Kehadiran divalidasi melalui GPS dan Foto Bukti.")
 
                         if img_camera:
-                            bytes_data = img_camera.getvalue()
+                            # Terapkan kompresi di sini
+                            raw_bytes = img_camera.getvalue()
+                            bytes_data = kompres_foto(raw_bytes)
+                            
                             cam_base64 = f"data:image/jpeg;base64,{base64.b64encode(bytes_data).decode('utf-8')}"
                             
                             tgl_sekarang_str = datetime.datetime.now(pytz.timezone('Asia/Makassar')).strftime('%Y%m%d_%H%M%S')
@@ -652,9 +674,12 @@ elif st.session_state.role == "Admin":
                             foto = st.file_uploader("Pilih Pas Foto Baru", type=['jpg', 'jpeg', 'png'], key=f"foto_up_{nip}")
                             
                             if foto and st.button("💾 Simpan & Update Foto", type="primary", key=f"btn_save_foto_{nip}", use_container_width=True):
-                                file_bytes = foto.getvalue()
+                                # Terapkan kompresi di sini
+                                raw_bytes = foto.getvalue()
+                                file_bytes = kompres_foto(raw_bytes, quality=70, max_size=(1000, 1000))
+                                
                                 path_simpan = f"foto_acuan/{nip}.jpg"
-                                url_foto = upload_ke_supabase(file_bytes, path_simpan, foto.type)
+                                url_foto = upload_ke_supabase(file_bytes, path_simpan, "image/jpeg") # Paksa tipe MIME ke JPEG
                                 
                                 if url_foto:
                                     supabase.table('pegawai').update({
